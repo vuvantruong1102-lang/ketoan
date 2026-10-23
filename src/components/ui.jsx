@@ -25,10 +25,10 @@ export function Loading({ children = 'Đang tải…' }) {
   return <div className="spin">{children}</div>
 }
 
-export function Modal({ title, onClose, children, footer }) {
+export function Modal({ title, onClose, children, footer, wide }) {
   return (
-    <div className="modal-bg" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+    <div className={`modal-bg ${wide ? 'wide-bg' : ''}`} onClick={onClose}>
+      <div className={`modal ${wide ? 'wide' : ''}`} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>{title}</h2>
           <button className="icon-btn" onClick={onClose}>✕</button>
