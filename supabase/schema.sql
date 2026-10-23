@@ -8,21 +8,20 @@
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
--- 0. DỌN DẸP (chạy lại được nhiều lần khi đang phát triển)
---    CẢNH BÁO: DROP sẽ xóa dữ liệu. Khi đã dùng thật, BỎ khối này đi.
+-- 0. SCHEMA RIÊNG CHO APP KẾ TOÁN
+--    App này dùng CHUNG project Supabase với nhiều app khác, nên TẤT CẢ
+--    bảng nằm trong schema riêng "ketoan" — KHÔNG đụng schema public của
+--    các app kia. Muốn gỡ sạch app kế toán sau này chỉ cần:
+--        drop schema ketoan cascade;
+--    (chỉ xóa đúng app kế toán, không ảnh hưởng app khác).
 -- ---------------------------------------------------------------------
-drop view  if exists v_inventory_onhand    cascade;
-drop view  if exists v_vat_by_quarter       cascade;
-drop view  if exists v_pl_by_quarter        cascade;
-drop table if exists cogs_period             cascade;
-drop table if exists inventory_opening       cascade;
-drop table if exists invoice_items           cascade;
-drop table if exists invoices                cascade;
-drop table if exists bank_book               cascade;
-drop table if exists cash_book               cascade;
-drop table if exists products                cascade;
-drop table if exists partners                cascade;
-drop table if exists periods                 cascade;
+-- CẢNH BÁO: dòng dưới xóa và tạo lại schema ketoan (chỉ app kế toán).
+-- An toàn với app khác. Khi đã có dữ liệu thật, BỎ dòng drop đi.
+drop schema if exists ketoan cascade;
+create schema ketoan;
+
+-- Mọi lệnh bên dưới chạy trong schema ketoan nhờ search_path này.
+set search_path = ketoan, public;
 
 -- ---------------------------------------------------------------------
 -- 1. KỲ KẾ TOÁN (theo quý)
@@ -41,7 +40,8 @@ comment on table periods is 'Các quý kế toán. status=closed sau khi bấm "
 -- Hàm tiện ích: từ một ngày suy ra (year, quarter)
 create or replace function period_of(d date)
 returns table(year int, quarter int)
-language sql immutable as $$
+language sql immutable
+set search_path = ketoan, public as $$
   select extract(year from d)::int,
          ((extract(month from d)::int - 1) / 3 + 1)::int;
 $$;
@@ -342,7 +342,8 @@ comment on view v_pl_by_quarter is
 --     Gọi: select close_period(2026, 1);
 -- =====================================================================
 create or replace function close_period(p_year int, p_quarter int)
-returns void language plpgsql as $$
+returns void language plpgsql
+set search_path = ketoan, public as $$
 declare
   m_start date := make_date(p_year, (p_quarter-1)*3 + 1, 1);
   m_end   date := (make_date(p_year, (p_quarter-1)*3 + 1, 1) + interval '3 months')::date;
