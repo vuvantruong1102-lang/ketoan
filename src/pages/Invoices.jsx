@@ -264,6 +264,7 @@ export default function Invoices() {
 
       {editing && (
         <Modal
+          wide
           title={editing === 'new' ? 'Nhập hóa đơn' : 'Sửa hóa đơn'}
           onClose={() => setEditing(null)}
           footer={
