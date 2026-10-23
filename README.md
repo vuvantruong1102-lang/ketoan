@@ -29,15 +29,28 @@ kế toán B01-DNN, checklist quý, tư vấn hồ sơ chứng từ.
 
 ### 1. Database (Supabase)
 
+> **App này dùng CHUNG một project Supabase với nhiều app khác.** Vì vậy toàn bộ bảng
+> của app kế toán nằm trong một **schema riêng tên `ketoan`**, hoàn toàn tách biệt khỏi
+> schema `public` của các app kia. Không có rủi ro đụng chạm dữ liệu app khác.
+
 1. Vào project Supabase → **SQL Editor**.
-2. Mở `supabase/schema.sql`, dán toàn bộ, bấm **Run**. (Tạo bảng, trigger, view, hàm chốt kỳ.)
-3. Mở `supabase/schema_rls.sql`, dán, **Run**. (Bật bảo mật RLS.)
-4. Tạo tài khoản đăng nhập: **Authentication → Users → Add user** (nhập email + mật khẩu,
+2. Mở `supabase/schema.sql`, dán toàn bộ, bấm **Run**. Khi hiện hộp thoại cảnh báo
+   (*destructive operations* / *RLS*), bấm **Run without RLS** — RLS bật ở bước sau.
+   (File tạo schema `ketoan` cùng toàn bộ bảng, trigger, view, hàm chốt kỳ.)
+3. Mở `supabase/schema_rls.sql`, dán, **Run**. (Cấp quyền + bật RLS cho schema `ketoan`.)
+4. **Mở schema cho API** (bắt buộc, làm trên giao diện):
+   **Project Settings → API → Exposed schemas → thêm `ketoan` → Save.**
+   Không làm bước này thì app báo lỗi *"schema must be one of…"*.
+5. Tạo tài khoản đăng nhập: **Authentication → Users → Add user** (email + mật khẩu,
    bật *Auto Confirm*). Phần mềm không mở đăng ký công khai vì dùng nội bộ.
 
-> ⚠️ Trong `schema.sql` có khối `DROP ... CASCADE` ở đầu để tiện chạy lại khi thử nghiệm.
-> **Khi đã nhập dữ liệu thật, hãy xóa khối đó đi** (có ghi chú cảnh báo tại chỗ), nếu không
-> chạy lại file sẽ mất sạch dữ liệu.
+> ⚠️ Trong `schema.sql` có dòng `drop schema if exists ketoan cascade;` ở đầu để tiện
+> chạy lại khi thử nghiệm. Dòng này **chỉ xóa schema `ketoan`** (app kế toán), không đụng
+> app khác. **Khi đã nhập dữ liệu thật, hãy xóa dòng drop đó đi**, nếu không chạy lại
+> file sẽ mất dữ liệu kế toán.
+>
+> 🚫 **Tuyệt đối không chạy `drop schema public cascade`** trên project này — nó sẽ xóa
+> bảng của tất cả app khác.
 
 ### 2. Lấy khóa API
 
