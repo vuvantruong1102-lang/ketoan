@@ -11,6 +11,8 @@ const blankHead = () => ({
 })
 const blankLine = () => ({
   product_id: '', description: '', quantity: 1, unit_price: 0, vat_rate: 8,
+  // để trống = tự tính; nhập số = ghi đè để khớp hóa đơn NCC
+  amount_override: '', tax_override: '',
 })
 
 export default function Invoices() {
@@ -49,7 +51,7 @@ export default function Invoices() {
 
   async function loadRefs() {
     const [{ data: p }, { data: pr }] = await Promise.all([
-      supabase.from('partners').select('id,name,is_supplier,is_customer').order('name'),
+      supabase.from('partners').select('id,name,tax_code,is_supplier,is_customer').order('name'),
       supabase.from('products').select('id,sku,name,kind').order('sku'),
     ])
     setPartners(p || [])
@@ -77,6 +79,8 @@ export default function Invoices() {
       product_id: i.product_id || '', description: i.description || '',
       quantity: Number(i.quantity), unit_price: Number(i.unit_price),
       vat_rate: Number(i.vat_rate),
+      amount_override: i.amount_override == null ? '' : String(i.amount_override),
+      tax_override: i.tax_override == null ? '' : String(i.tax_override),
     })) : [blankLine()])
     setEditing(r)
   }
@@ -87,12 +91,23 @@ export default function Invoices() {
   function addLine() { setLines((ls) => [...ls, blankLine()]) }
   function delLine(idx) { setLines((ls) => ls.filter((_, i) => i !== idx)) }
 
+  // Tính tổng GIỐNG HỆT trigger ở database: làm tròn từng dòng, ưu tiên số ghi đè.
+  function lineAmounts(l) {
+    const before = l.amount_override !== '' && l.amount_override != null
+      ? Number(l.amount_override)
+      : Math.round(Number(l.quantity || 0) * Number(l.unit_price || 0))
+    const tax = l.tax_override !== '' && l.tax_override != null
+      ? Number(l.tax_override)
+      : Math.round(before * Number(l.vat_rate || 0) / 100)
+    return { before, tax, total: before + tax }
+  }
+
   const totals = useMemo(() => {
     let before = 0, tax = 0
     for (const l of lines) {
-      const b = Number(l.quantity || 0) * Number(l.unit_price || 0)
-      before += b
-      tax += b * Number(l.vat_rate || 0) / 100
+      const a = lineAmounts(l)
+      before += a.before
+      tax += a.tax
     }
     return { before, tax, total: before + tax }
   }, [lines])
@@ -140,6 +155,8 @@ export default function Invoices() {
       quantity: Number(l.quantity),
       unit_price: Number(l.unit_price),
       vat_rate: Number(l.vat_rate),
+      amount_override: l.amount_override === '' ? null : Number(l.amount_override),
+      tax_override: l.tax_override === '' ? null : Number(l.tax_override),
     }))
     const { error: e2 } = await supabase.from('invoice_items').insert(itemsPayload)
     setSaving(false)
@@ -322,18 +339,25 @@ export default function Invoices() {
           <table className="grid" style={{ marginTop: 6 }}>
             <thead>
               <tr>
-                <th style={{ minWidth: 160 }}>Sản phẩm {head.category === 'goods' && '*'}</th>
+                <th style={{ minWidth: 150 }}>Sản phẩm {head.category === 'goods' && '*'}</th>
                 <th>Diễn giải</th>
-                <th className="num" style={{ width: 80 }}>SL</th>
-                <th className="num" style={{ width: 120 }}>Đơn giá</th>
-                <th className="num" style={{ width: 80 }}>%VAT</th>
+                <th className="num" style={{ width: 64 }}>SL</th>
+                <th className="num" style={{ width: 110 }}>Đơn giá</th>
+                <th className="num" style={{ width: 66 }}>%VAT</th>
                 <th className="num" style={{ width: 120 }}>Thành tiền</th>
-                <th style={{ width: 30 }}></th>
+                <th className="num" style={{ width: 120 }}>Tiền thuế</th>
+                <th className="num" style={{ width: 110 }}>Cộng</th>
+                <th style={{ width: 28 }}></th>
               </tr>
             </thead>
             <tbody>
               {lines.map((l, i) => {
-                const b = Number(l.quantity || 0) * Number(l.unit_price || 0)
+                const a = lineAmounts(l)
+                // giá trị tự tính (để làm placeholder gợi ý khi ô ghi đè trống)
+                const autoBefore = Math.round(Number(l.quantity || 0) * Number(l.unit_price || 0))
+                const autoTax = Math.round(
+                  (l.amount_override !== '' ? Number(l.amount_override) : autoBefore)
+                  * Number(l.vat_rate || 0) / 100)
                 return (
                   <tr key={i}>
                     <td>
@@ -366,7 +390,25 @@ export default function Invoices() {
                         <option value="8">8</option><option value="10">10</option>
                       </select>
                     </td>
-                    <td className="num" style={{ whiteSpace: 'nowrap' }}>{vnd(b)}</td>
+                    {/* Thành tiền: trống = tự tính (SL×đơn giá); nhập = ghi đè */}
+                    <td>
+                      <input type="number" min="0" step="any"
+                        value={l.amount_override}
+                        placeholder={String(autoBefore)}
+                        title="Để trống = tự tính. Nhập số để khớp hóa đơn NCC."
+                        style={{ textAlign: 'right' }}
+                        onChange={(e) => setLine(i, { amount_override: e.target.value })} />
+                    </td>
+                    {/* Tiền thuế: trống = tự tính; nhập = ghi đè để khớp hóa đơn */}
+                    <td>
+                      <input type="number" min="0" step="any"
+                        value={l.tax_override}
+                        placeholder={String(autoTax)}
+                        title="Để trống = tự tính. Nhập số để khớp hóa đơn NCC."
+                        style={{ textAlign: 'right' }}
+                        onChange={(e) => setLine(i, { tax_override: e.target.value })} />
+                    </td>
+                    <td className="num" style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>{vnd(a.total)}</td>
                     <td>
                       {lines.length > 1 &&
                         <button className="icon-btn del" onClick={() => delLine(i)}>✕</button>}
@@ -376,9 +418,13 @@ export default function Invoices() {
               })}
             </tbody>
           </table>
-          <button className="btn ghost sm" style={{ marginTop: 10 }} onClick={addLine}>
-            + Thêm dòng
-          </button>
+          <div className="btn-row" style={{ marginTop: 10, alignItems: 'center' }}>
+            <button className="btn ghost sm" onClick={addLine}>+ Thêm dòng</button>
+            <span className="inline-note" style={{ margin: 0 }}>
+              Ô “Thành tiền” và “Tiền thuế” để trống sẽ tự tính (số mờ là gợi ý). Nếu hóa
+              đơn NCC ghi khác do làm tròn, gõ đè số đúng vào để khớp từng đồng.
+            </span>
+          </div>
 
           {head.direction === 'in' && !head.vat_deductible && (
             <div className="alert warn" style={{ marginTop: 12 }}>
