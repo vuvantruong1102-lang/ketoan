@@ -124,13 +124,17 @@ create table invoice_items (
   quantity      numeric(18,4) not null default 1 check (quantity >= 0),
   unit_price    numeric(18,4) not null default 0 check (unit_price >= 0),  -- đơn giá chưa thuế
   vat_rate      numeric(5,2)  not null default 8 check (vat_rate in (0,5,8,10)),
-  -- các cột dưới tự tính bằng trigger
-  line_before_tax numeric(18,2) not null default 0,  -- quantity * unit_price
-  line_tax        numeric(18,2) not null default 0,  -- line_before_tax * vat_rate/100
+  -- GHI ĐÈ THỦ CÔNG (tùy chọn): để NULL = tự tính; điền số = dùng đúng số này.
+  -- Dùng khi số trên hóa đơn NCC lệch do cách làm tròn khác nhau.
+  amount_override numeric(18,2) check (amount_override is null or amount_override >= 0),
+  tax_override    numeric(18,2) check (tax_override    is null or tax_override    >= 0),
+  -- các cột dưới tự tính bằng trigger (ưu tiên số ghi đè nếu có)
+  line_before_tax numeric(18,2) not null default 0,  -- quantity * unit_price (hoặc amount_override)
+  line_tax        numeric(18,2) not null default 0,  -- line_before_tax * vat_rate/100 (hoặc tax_override)
   line_total      numeric(18,2) not null default 0,  -- before + tax
   created_at    timestamptz not null default now()
 );
-comment on table invoice_items is 'Dòng chi tiết hóa đơn. Thành tiền + thuế tự tính.';
+comment on table invoice_items is 'Dòng chi tiết hóa đơn. Thành tiền + thuế tự tính, có thể ghi đè tay.';
 create index idx_items_invoice on invoice_items (invoice_id);
 create index idx_items_product on invoice_items (product_id);
 
@@ -212,8 +216,12 @@ create index idx_bank_date on bank_book (tx_date);
 create or replace function fn_item_compute()
 returns trigger language plpgsql as $$
 begin
-  new.line_before_tax := round(new.quantity * new.unit_price, 2);
-  new.line_tax        := round(new.line_before_tax * new.vat_rate / 100.0, 2);
+  -- Thành tiền chưa thuế: dùng số ghi đè nếu có, không thì SL × đơn giá.
+  new.line_before_tax := coalesce(new.amount_override,
+                                  round(new.quantity * new.unit_price, 2));
+  -- Tiền thuế: dùng số ghi đè nếu có (để khớp đúng hóa đơn NCC), không thì tự tính.
+  new.line_tax        := coalesce(new.tax_override,
+                                  round(new.line_before_tax * new.vat_rate / 100.0, 2));
   new.line_total      := new.line_before_tax + new.line_tax;
   return new;
 end $$;
