@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, lazy, Suspense } from 'react'
 import { supabase } from '../lib/supabase'
 import { Panel, Alert, Empty, Loading, Modal } from '../components/ui'
 import InvoiceImport from '../components/InvoiceImport'
+// Tải lười: kéo theo xlsx (nặng), chỉ nạp khi mở modal import đầu ra.
+const OutputInvoiceImport = lazy(() => import('../components/OutputInvoiceImport'))
 import { exportVatPurchaseListing } from '../lib/exportVatListing'
 import { vnd, dmy, recentYears } from '../lib/format'
 
@@ -27,6 +29,7 @@ export default function Invoices() {
   const [lines, setLines] = useState([blankLine()])
   const [saving, setSaving] = useState(false)
   const [showImport, setShowImport] = useState(false)
+  const [showOutImport, setShowOutImport] = useState(false)
 
   // filters
   const yNow = new Date().getFullYear()
@@ -220,6 +223,7 @@ export default function Invoices() {
           <div className="sub">Nhập hóa đơn mua vào và bán ra. Thuế và tổng tiền tự tính.</div>
         </div>
         <div className="btn-row">
+          <button className="btn ghost" onClick={() => setShowOutImport(true)}>Import hóa đơn đầu ra (Excel)</button>
           <button className="btn ghost" onClick={exportListing}>Xuất bảng kê mua vào (Excel)</button>
           <button className="btn ghost" onClick={() => setShowImport(true)}>Import PDF / XML</button>
           <button className="btn" onClick={openNew}>+ Nhập hóa đơn</button>
@@ -483,6 +487,17 @@ export default function Invoices() {
           onClose={() => setShowImport(false)}
           onDone={() => { loadRefs(); load() }}
         />
+      )}
+
+      {showOutImport && (
+        <Suspense fallback={<div className="spin">Đang tải…</div>}>
+          <OutputInvoiceImport
+            partners={partners}
+            products={products}
+            onClose={() => setShowOutImport(false)}
+            onDone={() => { loadRefs(); load() }}
+          />
+        </Suspense>
       )}
     </>
   )
