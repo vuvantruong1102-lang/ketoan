@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Panel, Alert, Empty, Loading, Modal } from '../components/ui'
+import InvoiceImport from '../components/InvoiceImport'
 import { vnd, dmy, recentYears } from '../lib/format'
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -24,6 +25,7 @@ export default function Invoices() {
   const [head, setHead] = useState(blankHead())
   const [lines, setLines] = useState([blankLine()])
   const [saving, setSaving] = useState(false)
+  const [showImport, setShowImport] = useState(false)
 
   // filters
   const yNow = new Date().getFullYear()
@@ -182,7 +184,10 @@ export default function Invoices() {
           <h1>Hóa đơn</h1>
           <div className="sub">Nhập hóa đơn mua vào và bán ra. Thuế và tổng tiền tự tính.</div>
         </div>
-        <button className="btn" onClick={openNew}>+ Nhập hóa đơn</button>
+        <div className="btn-row">
+          <button className="btn ghost" onClick={() => setShowImport(true)}>Import PDF / XML</button>
+          <button className="btn" onClick={openNew}>+ Nhập hóa đơn</button>
+        </div>
       </div>
 
       <Alert>{err}</Alert>
@@ -434,6 +439,14 @@ export default function Invoices() {
             </div>
           )}
         </Modal>
+      )}
+
+      {showImport && (
+        <InvoiceImport
+          partners={partners}
+          onClose={() => setShowImport(false)}
+          onDone={() => { loadRefs(); load() }}
+        />
       )}
     </>
   )
