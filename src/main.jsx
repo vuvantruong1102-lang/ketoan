@@ -8,13 +8,13 @@ import Dashboard from './pages/Dashboard'
 import Partners from './pages/Partners'
 import Products from './pages/Products'
 import Invoices from './pages/Invoices'
-import CashBank from './pages/CashBank'
 import Reports from './pages/Reports'
 import ShopeeAffiliate from './pages/ShopeeAffiliate'
 import './index.css'
 
-// Tách riêng trang Tồn kho vì nó kéo theo thư viện xlsx (nặng).
+// Tách riêng các trang kéo theo xlsx (nặng).
 const Inventory = lazy(() => import('./pages/Inventory'))
+const BankAccounts = lazy(() => import('./pages/BankAccounts'))
 
 function Protected({ children }) {
   const { session, loading } = useAuth()
@@ -42,7 +42,9 @@ function App() {
         <Route path="inventory" element={
           <Suspense fallback={<div className="spin">Đang tải…</div>}><Inventory /></Suspense>
         } />
-        <Route path="cashbank" element={<CashBank />} />
+        <Route path="bank" element={
+          <Suspense fallback={<div className="spin">Đang tải…</div>}><BankAccounts /></Suspense>
+        } />
         <Route path="shopee" element={<ShopeeAffiliate />} />
         <Route path="reports" element={<Reports />} />
       </Route>
