@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Panel, Alert, Empty, Loading, Modal } from '../components/ui'
 import InvoiceImport from '../components/InvoiceImport'
+import { exportVatPurchaseListing } from '../lib/exportVatListing'
 import { vnd, dmy, recentYears } from '../lib/format'
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -36,7 +37,7 @@ export default function Invoices() {
   async function load() {
     setErr('')
     let query = supabase.from('invoices')
-      .select('*, partners(name)')
+      .select('*, partners(name, tax_code)')
       .order('invoice_date', { ascending: false })
       .order('id', { ascending: false })
     if (fDir) query = query.eq('direction', fDir)
@@ -177,6 +178,26 @@ export default function Invoices() {
     head.direction === 'in' ? p.is_supplier : p.is_customer
   )
 
+  // Xuất bảng kê hóa đơn mua vào (mẫu PL 01-1/GTGT) theo kỳ đang lọc.
+  function exportListing() {
+    setErr('')
+    const ins = (rows || []).filter((r) => r.direction === 'in')
+    if (ins.length === 0) { setErr('Không có hóa đơn mua vào trong kỳ đã chọn để xuất.'); return }
+    const data = ins.map((r) => ({
+      invoice_no: r.invoice_no,
+      invoice_date: r.invoice_date,
+      seller_name: r.partners?.name || '',
+      seller_tax_code: r.partners?.tax_code || '',
+      amount_before_tax: Number(r.amount_before_tax || 0),
+      deductible_tax: Number(r.tax_amount || 0),  // cột thuế của hóa đơn
+      vat_deductible: r.vat_deductible,            // quyết định vào nhóm 1 hay nhóm 4
+    }))
+    exportVatPurchaseListing(data, {
+      year: Number(fYear),
+      quarter: fQuarter ? Number(fQuarter) : undefined,
+    })
+  }
+
   return (
     <>
       <div className="page-head">
@@ -185,6 +206,7 @@ export default function Invoices() {
           <div className="sub">Nhập hóa đơn mua vào và bán ra. Thuế và tổng tiền tự tính.</div>
         </div>
         <div className="btn-row">
+          <button className="btn ghost" onClick={exportListing}>Xuất bảng kê mua vào (Excel)</button>
           <button className="btn ghost" onClick={() => setShowImport(true)}>Import PDF / XML</button>
           <button className="btn" onClick={openNew}>+ Nhập hóa đơn</button>
         </div>
