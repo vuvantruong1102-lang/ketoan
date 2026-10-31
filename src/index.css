@@ -109,7 +109,7 @@ a { color: var(--brand); }
 }
 .sidebar .footer button:hover { background: rgba(255, 255, 255, 0.1); }
 
-.content { flex: 1; padding: 24px 28px 60px; max-width: 1180px; }
+.content { flex: 1; padding: 24px 28px 60px; max-width: 1340px; }
 .page-head {
   display: flex;
   align-items: baseline;
@@ -323,4 +323,16 @@ input[type="checkbox"] { width: auto; }
   .nav { display: flex; flex-wrap: wrap; }
   .kpis { grid-template-columns: 1fr 1fr; }
   .content { padding: 16px; }
+}
+
+/* ---------- Shopee affiliate: 3 khung dọc ---------- */
+.shopee-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.shopee-cols .panel { margin-bottom: 0; }
+@media (max-width: 1100px) {
+  .shopee-cols { grid-template-columns: 1fr; }
 }

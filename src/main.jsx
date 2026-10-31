@@ -10,6 +10,7 @@ import Products from './pages/Products'
 import Invoices from './pages/Invoices'
 import CashBank from './pages/CashBank'
 import Reports from './pages/Reports'
+import ShopeeAffiliate from './pages/ShopeeAffiliate'
 import './index.css'
 
 // Tách riêng trang Tồn kho vì nó kéo theo thư viện xlsx (nặng).
@@ -42,6 +43,7 @@ function App() {
           <Suspense fallback={<div className="spin">Đang tải…</div>}><Inventory /></Suspense>
         } />
         <Route path="cashbank" element={<CashBank />} />
+        <Route path="shopee" element={<ShopeeAffiliate />} />
         <Route path="reports" element={<Reports />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
