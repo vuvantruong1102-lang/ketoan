@@ -173,7 +173,7 @@ export default function BankAccounts() {
   if (accounts === null) return <Loading />
 
   return (
-    <>
+    <div className="full-bleed">
       <div className="page-head">
         <div>
           <h1>Tài khoản ngân hàng</h1>
@@ -265,9 +265,11 @@ export default function BankAccounts() {
                 <table className="grid">
                   <thead>
                     <tr>
-                      <th>Ngày</th><th>Nội dung</th>
-                      <th className="num">Thu</th><th className="num">Chi</th>
-                      <th className="num">Số dư</th><th style={{ width: 28 }}></th>
+                      <th style={{ width: 92 }}>Ngày</th><th>Nội dung</th>
+                      <th className="num" style={{ width: 150 }}>Thu</th>
+                      <th className="num" style={{ width: 150 }}>Chi</th>
+                      <th className="num" style={{ width: 160 }}>Số dư</th>
+                      <th style={{ width: 28 }}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -285,9 +287,9 @@ export default function BankAccounts() {
                             <span className="muted" style={{ fontSize: 11, display: 'block' }}>{hhmm}</span>}
                         </td>
                         <td>{t.description || <span className="muted">—</span>}</td>
-                        <td className="num pos">{t.direction === 'in' ? vnd(t.amount) : ''}</td>
-                        <td className="num neg">{t.direction === 'out' ? vnd(t.amount) : ''}</td>
-                        <td className="num" style={{ fontWeight: 600 }}>{vnd(t.balance)}</td>
+                        <td className="num pos" style={{ whiteSpace: 'nowrap' }}>{t.direction === 'in' ? vnd(t.amount) : ''}</td>
+                        <td className="num neg" style={{ whiteSpace: 'nowrap' }}>{t.direction === 'out' ? vnd(t.amount) : ''}</td>
+                        <td className="num" style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{vnd(t.balance)}</td>
                         <td><button className="icon-btn del" onClick={() => delTx(t)}>✕</button></td>
                       </tr>
                     )})}
@@ -421,6 +423,6 @@ export default function BankAccounts() {
           )}
         </Modal>
       )}
-    </>
+    </div>
   )
 }
