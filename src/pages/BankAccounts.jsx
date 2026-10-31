@@ -18,7 +18,7 @@ export default function BankAccounts() {
   const [accForm, setAccForm] = useState({ name: '', bank: '', account_no: '', opening_balance: 0, note: '' })
 
   // form giao dịch tay
-  const [txForm, setTxForm] = useState({ tx_date: today(), direction: 'in', amount: '', description: '' })
+  const [txForm, setTxForm] = useState({ tx_date: today(), tx_time: '', direction: 'in', amount: '', description: '' })
 
   // import sao kê
   const [showImport, setShowImport] = useState(false)
@@ -39,7 +39,9 @@ export default function BankAccounts() {
     if (!accId) { setTxs([]); return }
     const { data, error } = await supabase.from('bank_tx').select('*')
       .eq('account_id', accId)
-      .order('tx_date', { ascending: true }).order('id', { ascending: true })
+      .order('tx_at', { ascending: true, nullsFirst: true })
+      .order('tx_date', { ascending: true })
+      .order('id', { ascending: true })
     if (error) { setErr(error.message); return }
     setTxs(data)
   }
@@ -112,12 +114,15 @@ export default function BankAccounts() {
     setErr('')
     if (!selId) { setErr('Chọn tài khoản trước.'); return }
     if (!txForm.tx_date || !(Number(txForm.amount) > 0)) { setErr('Nhập ngày và số tiền > 0.'); return }
+    const t = /^\d{2}:\d{2}(:\d{2})?$/.test(txForm.tx_time) ? txForm.tx_time : '00:00:00'
     const { error } = await supabase.from('bank_tx').insert({
-      account_id: selId, tx_date: txForm.tx_date, direction: txForm.direction,
+      account_id: selId, tx_date: txForm.tx_date,
+      tx_at: `${txForm.tx_date}T${t.length === 5 ? t + ':00' : t}`,
+      direction: txForm.direction,
       amount: Number(txForm.amount), description: txForm.description.trim() || null,
     })
     if (error) { setErr(error.message); return }
-    setTxForm({ tx_date: txForm.tx_date, direction: txForm.direction, amount: '', description: '' })
+    setTxForm({ tx_date: txForm.tx_date, tx_time: '', direction: txForm.direction, amount: '', description: '' })
     loadTxs(selId)
   }
   async function delTx(t) {
@@ -151,7 +156,9 @@ export default function BankAccounts() {
     if (good.length === 0) { setImpErr('Không có dòng hợp lệ để ghi.'); return }
     setSavingImp(true)
     const payload = good.map((r) => ({
-      account_id: selId, tx_date: r.tx_date, direction: r.direction,
+      account_id: selId, tx_date: r.tx_date,
+      tx_at: r.tx_at || `${r.tx_date}T00:00:00`,
+      direction: r.direction,
       amount: Number(r.amount), description: r.description || null,
     }))
     const { error } = await supabase.from('bank_tx').insert(payload)
@@ -218,9 +225,14 @@ export default function BankAccounts() {
               {/* form thêm giao dịch */}
               <div className="row c4" style={{ alignItems: 'end' }}>
                 <div className="field" style={{ marginBottom: 0 }}>
-                  <label>Ngày</label>
-                  <input type="date" value={txForm.tx_date}
-                    onChange={(e) => setTxForm({ ...txForm, tx_date: e.target.value })} />
+                  <label>Ngày giờ</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input type="date" value={txForm.tx_date}
+                      onChange={(e) => setTxForm({ ...txForm, tx_date: e.target.value })} />
+                    <input type="time" step="1" value={txForm.tx_time} style={{ width: 110 }}
+                      title="Giờ (tùy chọn) — giúp xếp đúng thứ tự trong ngày"
+                      onChange={(e) => setTxForm({ ...txForm, tx_time: e.target.value })} />
+                  </div>
                 </div>
                 <div className="field" style={{ marginBottom: 0 }}>
                   <label>Loại</label>
@@ -264,16 +276,21 @@ export default function BankAccounts() {
                       <td className="num" style={{ fontWeight: 600 }}>{vnd(selected.opening_balance)}</td>
                       <td></td>
                     </tr>
-                    {txsWithBalance.map((t) => (
+                    {txsWithBalance.map((t) => {
+                      const hhmm = t.tx_at ? String(t.tx_at).slice(11, 19) : ''
+                      return (
                       <tr key={t.id}>
-                        <td>{dmy(t.tx_date)}</td>
+                        <td>{dmy(t.tx_date)}
+                          {hhmm && hhmm !== '00:00:00' &&
+                            <span className="muted" style={{ fontSize: 11, display: 'block' }}>{hhmm}</span>}
+                        </td>
                         <td>{t.description || <span className="muted">—</span>}</td>
                         <td className="num pos">{t.direction === 'in' ? vnd(t.amount) : ''}</td>
                         <td className="num neg">{t.direction === 'out' ? vnd(t.amount) : ''}</td>
                         <td className="num" style={{ fontWeight: 600 }}>{vnd(t.balance)}</td>
                         <td><button className="icon-btn del" onClick={() => delTx(t)}>✕</button></td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                 </table>
               )}
@@ -379,6 +396,7 @@ export default function BankAccounts() {
                     <td>
                       <input type="date" value={r.tx_date}
                         onChange={(e) => patchImp(i, { tx_date: e.target.value, error: null })} />
+                      {r.tx_time && <div className="muted" style={{ fontSize: 11 }}>{r.tx_time}</div>}
                     </td>
                     <td>
                       <input value={r.description}
