@@ -39,20 +39,34 @@ export default function Invoices() {
 
   async function load() {
     setErr('')
+    // Lọc theo khoảng ngày NGAY TRONG TRUY VẤN (không lọc ở client), nếu không
+    // Supabase chỉ trả 1000 dòng mới nhất và sẽ thiếu hóa đơn cũ của kỳ.
+    const y = Number(fYear)
+    let from, to
+    if (fQuarter) {
+      const q = Number(fQuarter)
+      const m0 = (q - 1) * 3            // tháng bắt đầu (0-based)
+      from = `${y}-${String(m0 + 1).padStart(2, '0')}-01`
+      // ngày đầu quý sau
+      const nextM = m0 + 3
+      to = nextM >= 12 ? `${y + 1}-01-01` : `${y}-${String(nextM + 1).padStart(2, '0')}-01`
+    } else {
+      from = `${y}-01-01`
+      to = `${y + 1}-01-01`
+    }
+
     let query = supabase.from('invoices')
       .select('*, partners(name, tax_code)')
+      .gte('invoice_date', from)
+      .lt('invoice_date', to)
       .order('invoice_date', { ascending: false })
       .order('id', { ascending: false })
+      .limit(5000)   // nới trần để hiện đủ hóa đơn trong kỳ
     if (fDir) query = query.eq('direction', fDir)
-    // lọc theo năm/quý ở client cho đơn giản (dữ liệu nhỏ)
+
     const { data, error } = await query
     if (error) { setErr(error.message); return }
-    let d = data
-    d = d.filter((r) => new Date(r.invoice_date).getFullYear() === Number(fYear))
-    if (fQuarter) {
-      d = d.filter((r) => Math.floor(new Date(r.invoice_date).getMonth() / 3) + 1 === Number(fQuarter))
-    }
-    setRows(d)
+    setRows(data)
   }
 
   async function loadRefs() {
