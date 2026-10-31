@@ -137,7 +137,9 @@ export default function InvoiceImport({ partners, onClose, onDone }) {
         vat_deductible: row.category === 'service' || row.category === 'goods' ? row.vat_deductible : true,
         description: null,
       }).select('id').single()
-      if (e1) throw new Error(e1.message)
+      if (e1) throw new Error(e1.code === '23505'
+        ? 'Số hóa đơn này đã tồn tại cho NCC — bỏ qua để tránh trùng.'
+        : e1.message)
 
       // dòng hàng: dịch vụ không cần SKU; dùng amount_override + tax_override
       // để tổng khớp đúng hóa đơn gốc (tránh lệch làm tròn).
