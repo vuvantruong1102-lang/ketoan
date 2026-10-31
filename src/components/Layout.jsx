@@ -23,6 +23,7 @@ export default function Layout() {
           <NavLink to="/invoices" className={link}>Hóa đơn</NavLink>
           <NavLink to="/inventory" className={link}>Tồn kho</NavLink>
           <NavLink to="/cashbank" className={link}>Tiền mặt & Ngân hàng</NavLink>
+          <NavLink to="/shopee" className={link}>Đối soát Shopee</NavLink>
 
           <div className="group-label">Báo cáo</div>
           <NavLink to="/reports" className={link}>Lợi nhuận · VAT · Chốt kỳ</NavLink>
