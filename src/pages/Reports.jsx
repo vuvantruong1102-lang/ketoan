@@ -11,23 +11,44 @@ export default function Reports() {
   const [vat, setVat] = useState(null)
   const [cogs, setCogs] = useState([])
   const [period, setPeriod] = useState(null)
+  const [carryover, setCarryover] = useState(0)        // thuế khấu trừ kỳ trước chuyển sang
+  const [carryInput, setCarryInput] = useState('')     // ô nhập
+  const [savingCarry, setSavingCarry] = useState(false)
   const [err, setErr] = useState('')
   const [ok, setOk] = useState('')
   const [busy, setBusy] = useState(false)
 
   async function load() {
     setErr(''); setOk('')
-    const [plR, vatR, cogsR, perR] = await Promise.all([
+    const [plR, vatR, cogsR, perR, carryR] = await Promise.all([
       supabase.from('v_pl_by_quarter').select('*').eq('year', year).eq('quarter', quarter).maybeSingle(),
       supabase.from('v_vat_by_quarter').select('*').eq('year', year).eq('quarter', quarter).maybeSingle(),
       supabase.from('cogs_period').select('*, products(sku,name)').eq('year', year).eq('quarter', quarter).order('id'),
       supabase.from('periods').select('*').eq('year', year).eq('quarter', quarter).maybeSingle(),
+      supabase.from('vat_carryover').select('amount').eq('year', year).eq('quarter', quarter).maybeSingle(),
     ])
     if (plR.error) setErr(plR.error.message)
     setPl(plR.data || { revenue: 0, cogs: 0, expenses: 0, profit: 0 })
     setVat(vatR.data || { output_vat: 0, deductible_input_vat: 0, vat_payable: 0 })
     setCogs(cogsR.data || [])
     setPeriod(perR.data || null)
+    const c = Number(carryR.data?.amount || 0)
+    setCarryover(c)
+    setCarryInput(c ? String(c) : '')
+  }
+
+  async function saveCarryover() {
+    setErr(''); setOk('')
+    setSavingCarry(true)
+    const amount = Number(carryInput || 0)
+    const { error } = await supabase.from('vat_carryover')
+      .upsert({ year: Number(year), quarter: Number(quarter), amount },
+              { onConflict: 'year,quarter' })
+    setSavingCarry(false)
+    if (error) { setErr(error.message); return }
+    setCarryover(amount)
+    setOk('Đã lưu số thuế khấu trừ kỳ trước.')
+    setTimeout(() => setOk(''), 3000)
   }
   useEffect(() => { load() }, [year, quarter])
 
@@ -120,22 +141,45 @@ export default function Reports() {
           </Panel>
 
           <Panel title="Thuế GTGT phải nộp">
-            <table className="grid">
-              <tbody>
-                <tr><td>Thuế GTGT đầu ra (bán ra)</td>
-                  <td className="num">{vnd(vat.output_vat)}</td></tr>
-                <tr><td>(−) Thuế GTGT đầu vào được khấu trừ</td>
-                  <td className="num">{vnd(vat.deductible_input_vat)}</td></tr>
-                <tr style={{ borderTop: '2px solid var(--line-strong)' }}>
-                  <td style={{ fontWeight: 700 }}>
-                    {vat.vat_payable >= 0 ? 'Thuế phải nộp' : 'Được khấu trừ chuyển kỳ sau'}
-                  </td>
-                  <td className={`num ${vat.vat_payable > 0 ? 'neg' : 'pos'}`} style={{ fontWeight: 700 }}>
-                    {vnd(Math.abs(vat.vat_payable))}</td></tr>
-              </tbody>
-            </table>
-            <div className="inline-note">
+            {/* số phải nộp = đầu ra − đầu vào khấu trừ − khấu trừ kỳ trước */}
+            {(() => {
+              const payable = Number(vat.output_vat) - Number(vat.deductible_input_vat) - Number(carryover)
+              return (
+                <table className="grid">
+                  <tbody>
+                    <tr><td>Thuế GTGT đầu ra (bán ra)</td>
+                      <td className="num">{vnd(vat.output_vat)}</td></tr>
+                    <tr><td>(−) Thuế GTGT đầu vào được khấu trừ</td>
+                      <td className="num">{vnd(vat.deductible_input_vat)}</td></tr>
+                    <tr><td>(−) Thuế GTGT khấu trừ kỳ trước chuyển sang</td>
+                      <td className="num">{vnd(carryover)}</td></tr>
+                    <tr style={{ borderTop: '2px solid var(--line-strong)' }}>
+                      <td style={{ fontWeight: 700 }}>
+                        {payable >= 0 ? 'Thuế phải nộp' : 'Được khấu trừ chuyển kỳ sau'}
+                      </td>
+                      <td className={`num ${payable > 0 ? 'neg' : 'pos'}`} style={{ fontWeight: 700 }}>
+                        {vnd(Math.abs(payable))}</td></tr>
+                  </tbody>
+                </table>
+              )
+            })()}
+
+            <div className="row c2" style={{ marginTop: 14, alignItems: 'end' }}>
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label>Thuế khấu trừ kỳ trước chuyển sang (nhập tay)</label>
+                <input type="number" step="any" min="0" value={carryInput}
+                  placeholder="0"
+                  onChange={(e) => setCarryInput(e.target.value)} />
+              </div>
+              <div className="field" style={{ marginBottom: 0 }}>
+                <button className="btn sm" onClick={saveCarryover} disabled={savingCarry}>
+                  {savingCarry ? 'Đang lưu…' : 'Lưu số khấu trừ kỳ trước'}
+                </button>
+              </div>
+            </div>
+            <div className="inline-note" style={{ marginTop: 8 }}>
               Hóa đơn mua “không được khấu trừ” đã được loại khỏi thuế đầu vào và chuyển sang chi phí.
+              Số khấu trừ kỳ trước được lưu riêng cho {year}/Q{quarter}.
             </div>
           </Panel>
 

@@ -105,7 +105,7 @@ export default function ShopeeAffiliate() {
   const loading = rows === null || recs === null
 
   return (
-    <>
+    <div className="full-bleed">
       <div className="page-head">
         <div>
           <h1>Đối soát Shopee Affiliate</h1>
@@ -268,6 +268,6 @@ export default function ShopeeAffiliate() {
           </Panel>
         </div>
       )}
-    </>
+    </div>
   )
 }

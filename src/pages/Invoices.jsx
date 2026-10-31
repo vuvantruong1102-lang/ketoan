@@ -118,6 +118,10 @@ export default function Invoices() {
   async function save() {
     setErr('')
     if (!head.invoice_date) { setErr('Chọn ngày hóa đơn.'); return }
+    if (!head.partner_id) {
+      setErr(head.direction === 'in' ? 'Phải chọn nhà cung cấp.' : 'Phải chọn khách hàng.')
+      return
+    }
     const cleanLines = lines.filter((l) => Number(l.quantity) > 0 || Number(l.unit_price) > 0)
     if (cleanLines.length === 0) { setErr('Hóa đơn phải có ít nhất một dòng.'); return }
     // hàng hóa cần SKU để vào tồn kho
@@ -142,12 +146,22 @@ export default function Invoices() {
     let invoiceId
     if (editing === 'new') {
       const { data, error } = await supabase.from('invoices').insert(headPayload).select('id').single()
-      if (error) { setErr(error.message); setSaving(false); return }
+      if (error) {
+        setErr(error.code === '23505'
+          ? `Số hóa đơn "${head.invoice_no}" đã tồn tại cho đối tác này. Không thể lưu trùng.`
+          : error.message)
+        setSaving(false); return
+      }
       invoiceId = data.id
     } else {
       invoiceId = editing.id
       const { error } = await supabase.from('invoices').update(headPayload).eq('id', invoiceId)
-      if (error) { setErr(error.message); setSaving(false); return }
+      if (error) {
+        setErr(error.code === '23505'
+          ? `Số hóa đơn "${head.invoice_no}" đã tồn tại cho đối tác này. Không thể lưu trùng.`
+          : error.message)
+        setSaving(false); return
+      }
       await supabase.from('invoice_items').delete().eq('invoice_id', invoiceId)
     }
 
@@ -202,7 +216,7 @@ export default function Invoices() {
     <>
       <div className="page-head">
         <div>
-          <h1>Hóa đơn</h1>
+          <h1>Hóa đơn đầu vào</h1>
           <div className="sub">Nhập hóa đơn mua vào và bán ra. Thuế và tổng tiền tự tính.</div>
         </div>
         <div className="btn-row">
