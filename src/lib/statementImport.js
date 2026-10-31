@@ -20,11 +20,15 @@ const schema = {
         type: 'object', additionalProperties: false,
         properties: {
           tx_date: { type: ['string', 'null'], description: 'YYYY-MM-DD' },
+          tx_time: {
+            type: ['string', 'null'],
+            description: 'Giờ giao dịch HH:MM:SS nếu sao kê có (vd 15:31:12), không có thì null',
+          },
           description: { type: ['string', 'null'] },
           direction: { type: 'string', enum: ['in', 'out'], description: 'in=tiền vào, out=tiền ra' },
           amount: { type: ['number', 'null'], description: 'số tiền dương, không dấu phân cách' },
         },
-        required: ['tx_date', 'description', 'direction', 'amount'],
+        required: ['tx_date', 'tx_time', 'description', 'direction', 'amount'],
       },
     },
   },
@@ -48,9 +52,12 @@ async function callOpenAI(messages) {
 
 const SYS =
   'Bạn đọc sao kê ngân hàng Việt Nam và trích từng dòng giao dịch. ' +
-  'direction="in" nếu tiền VÀO tài khoản (ghi có), "out" nếu tiền RA (ghi nợ). ' +
-  'amount là số dương, không dấu phân cách, không chữ. Ngày YYYY-MM-DD. ' +
-  'Bỏ qua dòng tiêu đề, dòng tổng, dòng số dư. Chỉ lấy giao dịch thật.'
+  'direction="in" nếu tiền VÀO tài khoản (cột Có/Credit), "out" nếu tiền RA (cột Nợ/Debit). ' +
+  'amount là số dương, không dấu phân cách, không chữ. ' +
+  'tx_date theo YYYY-MM-DD. QUAN TRỌNG: nếu sao kê có cột thời gian/ngày giờ thực hiện ' +
+  '(vd "2026-10-31 15:31:12"), hãy tách GIỜ ra tx_time dạng HH:MM:SS — việc này cần ' +
+  'để sắp đúng thứ tự các giao dịch trong cùng một ngày. Nếu không có giờ thì tx_time=null. ' +
+  'Bỏ qua dòng tiêu đề, dòng tổng, dòng số dư đầu/cuối. Chỉ lấy giao dịch thật.'
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
@@ -62,13 +69,21 @@ function fileToBase64(file) {
 }
 
 function normRows(rows) {
-  return (rows || []).map((r) => ({
-    tx_date: r.tx_date || '',
-    description: r.description || '',
-    direction: r.direction === 'out' ? 'out' : 'in',
-    amount: Number(r.amount) || 0,
-    error: (!r.tx_date || !(Number(r.amount) > 0)) ? 'thiếu ngày hoặc số tiền' : null,
-  }))
+  return (rows || []).map((r) => {
+    const date = r.tx_date || ''
+    // ghép ngày + giờ thành tx_at (ISO). Không có giờ -> 00:00:00.
+    const time = /^\d{2}:\d{2}(:\d{2})?$/.test(r.tx_time || '') ? r.tx_time : null
+    const tx_at = date ? `${date}T${time || '00:00:00'}` : null
+    return {
+      tx_date: date,
+      tx_time: time || '',
+      tx_at,
+      description: r.description || '',
+      direction: r.direction === 'out' ? 'out' : 'in',
+      amount: Number(r.amount) || 0,
+      error: (!date || !(Number(r.amount) > 0)) ? 'thiếu ngày hoặc số tiền' : null,
+    }
+  })
 }
 
 export async function readStatementExcel(file) {
