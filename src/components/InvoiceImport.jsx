@@ -44,10 +44,20 @@ export default function InvoiceImport({ partners, onClose, onDone }) {
 
   async function onFiles(fileList) {
     setErr('')
-    const files = Array.from(fileList).filter((f) =>
-      /\.(pdf|xml)$/i.test(f.name)
+    // Lưu ý: fileList là tham chiếu "sống" tới input.files. Phải chuyển sang
+    // mảng NGAY (trước khi input bị reset ở nơi gọi), nếu không sẽ thành rỗng.
+    const all = Array.from(fileList || [])
+    const files = all.filter((f) =>
+      /\.(pdf|xml)$/i.test(f.name) ||
+      f.type === 'application/pdf' ||
+      f.type === 'text/xml' || f.type === 'application/xml'
     )
-    if (files.length === 0) { setErr('Không có file .pdf hoặc .xml nào.'); return }
+    if (files.length === 0) {
+      setErr(all.length === 0
+        ? 'Chưa chọn được file nào. Hãy chọn file rồi bấm Open.'
+        : 'File đã chọn không phải .pdf hoặc .xml.')
+      return
+    }
     const pdfs = files.filter((f) => /\.pdf$/i.test(f.name))
     if (pdfs.length > 0 && !OPENAI_KEY) {
       setErr('Có file PDF nhưng chưa cấu hình VITE_OPENAI_API_KEY. XML vẫn đọc được.')
@@ -184,7 +194,12 @@ export default function InvoiceImport({ partners, onClose, onDone }) {
               {busy ? 'Đang đọc…' : 'Chọn file PDF / XML'}
               <input ref={fileRef} type="file" accept=".pdf,.xml" multiple disabled={busy}
                 style={{ display: 'none' }}
-                onChange={(e) => { const fs = e.target.files; e.target.value = ''; onFiles(fs) }} />
+                onChange={(e) => {
+                  // chuyển sang mảng NGAY, rồi mới reset input (reset làm mất e.target.files)
+                  const picked = Array.from(e.target.files || [])
+                  e.target.value = ''
+                  onFiles(picked)
+                }} />
             </label>
             <span className="inline-note" style={{ margin: 0 }}>
               Chọn nhiều file cùng lúc. XML đọc trực tiếp; PDF do AI đọc.
