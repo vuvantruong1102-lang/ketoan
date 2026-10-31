@@ -6,6 +6,20 @@ import { parseInvoiceFile } from '../lib/invoiceImport'
 
 const OPENAI_KEY = import.meta.env.VITE_OPENAI_API_KEY || ''
 
+// Thông tin doanh nghiệp (người mua hợp lệ). MST là chuẩn chính để đối chiếu.
+const OWN_TAX_CODE = (import.meta.env.VITE_OWN_TAX_CODE || '2400883385').replace(/\s/g, '')
+
+// số tiền có dấu chấm ngăn cách nghìn, ví dụ 85.922.222
+function money(n) {
+  return Math.round(Number(n || 0)).toLocaleString('vi-VN')
+}
+
+// Hóa đơn hợp lệ khi MST người mua = MST doanh nghiệp.
+function checkValid(buyerTax) {
+  const t = String(buyerTax || '').replace(/\s/g, '')
+  return t && t === OWN_TAX_CODE
+}
+
 // Mỗi dòng bảng kê = 1 hóa đơn đã đọc, có thể sửa trước khi ghi sổ.
 // Mặc định: hóa đơn mua, dịch vụ, được khấu trừ (theo yêu cầu).
 function toRow(parsed) {
@@ -21,8 +35,10 @@ function toRow(parsed) {
     seller_name: parsed.seller_name || '',
     seller_tax_code: parsed.seller_tax_code || '',
     seller_address: parsed.seller_address || '',
-    category: 'service',        // mặc định dịch vụ
-    vat_deductible: true,       // mặc định được khấu trừ
+    buyer_name: parsed.buyer_name || '',
+    buyer_tax_code: parsed.buyer_tax_code || '',
+    category: 'service',        // mặc định dịch vụ (ẩn, vẫn dùng khi ghi sổ)
+    vat_deductible: true,       // mặc định được khấu trừ (ẩn, vẫn dùng khi ghi sổ)
     amount_before_tax: beforeTax,
     tax_amount: tax,
     // giữ lại dòng hàng gốc để tạo invoice_items
@@ -213,25 +229,27 @@ export default function InvoiceImport({ partners, onClose, onDone }) {
       {rows.length === 0 ? (
         <div className="empty">Chưa có file nào. Chọn file để bắt đầu.</div>
       ) : (
-        <table className="grid">
+        <table className="grid" style={{ fontSize: 13.5 }}>
           <thead>
             <tr>
-              <th style={{ width: 30 }}></th>
+              <th style={{ width: 28 }}></th>
               <th>Nhà cung cấp</th>
-              <th style={{ width: 110 }}>MST</th>
-              <th style={{ width: 92 }}>Ngày</th>
-              <th style={{ width: 96 }}>Số HĐ</th>
-              <th style={{ width: 100 }}>Loại</th>
-              <th style={{ width: 110 }}>Khấu trừ</th>
-              <th className="num" style={{ width: 120 }}>Chưa thuế</th>
-              <th className="num" style={{ width: 110 }}>Thuế</th>
-              <th style={{ width: 90 }}>Trạng thái</th>
-              <th style={{ width: 30 }}></th>
+              <th style={{ width: 150 }}>MST</th>
+              <th style={{ width: 110 }}>Ngày</th>
+              <th style={{ width: 110 }}>Số HĐ</th>
+              <th className="num" style={{ width: 140 }}>Chưa thuế</th>
+              <th className="num" style={{ width: 130 }}>Thuế</th>
+              <th className="num" style={{ width: 150 }}>Thành tiền</th>
+              <th style={{ width: 150 }}>Hợp lệ</th>
+              <th style={{ width: 90 }}>Ghi sổ</th>
+              <th style={{ width: 28 }}></th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r, i) => {
               const matched = matchPartner(r.seller_tax_code)
+              const total = Number(r.amount_before_tax || 0) + Number(r.tax_amount || 0)
+              const valid = checkValid(r.buyer_tax_code)
               return (
                 <tr key={i} style={r.parseError ? { background: 'var(--danger-soft)' } : undefined}>
                   <td>
@@ -263,28 +281,30 @@ export default function InvoiceImport({ partners, onClose, onDone }) {
                       onChange={(e) => patchRow(i, { invoice_no: e.target.value })} />
                   </td>
                   <td>
-                    <select value={r.category}
-                      onChange={(e) => patchRow(i, { category: e.target.value })}>
-                      <option value="service">Dịch vụ</option>
-                      <option value="goods">Hàng hóa</option>
-                    </select>
-                  </td>
-                  <td>
-                    <select value={r.vat_deductible ? '1' : '0'}
-                      onChange={(e) => patchRow(i, { vat_deductible: e.target.value === '1' })}>
-                      <option value="1">Được</option>
-                      <option value="0">Không</option>
-                    </select>
-                  </td>
-                  <td>
-                    <input type="number" step="any" value={r.amount_before_tax}
+                    <input inputMode="numeric" value={money(r.amount_before_tax)}
                       style={{ textAlign: 'right' }}
-                      onChange={(e) => patchRow(i, { amount_before_tax: Number(e.target.value) })} />
+                      onChange={(e) => patchRow(i, {
+                        amount_before_tax: Number(String(e.target.value).replace(/[^\d]/g, '')) || 0
+                      })} />
                   </td>
                   <td>
-                    <input type="number" step="any" value={r.tax_amount}
+                    <input inputMode="numeric" value={money(r.tax_amount)}
                       style={{ textAlign: 'right' }}
-                      onChange={(e) => patchRow(i, { tax_amount: Number(e.target.value) })} />
+                      onChange={(e) => patchRow(i, {
+                        tax_amount: Number(String(e.target.value).replace(/[^\d]/g, '')) || 0
+                      })} />
+                  </td>
+                  <td className="num" style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    {money(total)}
+                  </td>
+                  <td>
+                    {valid
+                      ? <span className="badge in">✓ Hợp lệ</span>
+                      : <span className="badge closed" title={
+                          r.buyer_tax_code
+                            ? `MST người mua: ${r.buyer_tax_code} (khác ${OWN_TAX_CODE})`
+                            : 'Không đọc được MST người mua'
+                        }>⚠ HĐ không hợp lệ</span>}
                   </td>
                   <td>
                     {r.status === 'ready' && <span className="muted">Chờ ghi</span>}
@@ -303,11 +323,12 @@ export default function InvoiceImport({ partners, onClose, onDone }) {
         </table>
       )}
 
-      {rows.some((r) => r.category === 'goods') && (
+      {rows.some((r) => !r.parseError && !checkValid(r.buyer_tax_code)) && (
         <div className="alert warn" style={{ marginTop: 12 }}>
-          Có dòng chọn “Hàng hóa”. Khi import hàng loạt, dòng hàng hóa sẽ được ghi
-          <b> không gắn SKU</b> nên không vào tồn kho. Nếu cần theo dõi tồn kho, hãy nhập
-          các hóa đơn hàng hóa đó bằng form thường (chọn SKU từng dòng).
+          Có hóa đơn <b>không hợp lệ</b> — MST người mua không khớp doanh nghiệp
+          ({OWN_TAX_CODE}). Nên kiểm tra lại: có thể hóa đơn ghi sai, hoặc không phải
+          hóa đơn mua vào của bạn. Những hóa đơn này vẫn ghi sổ được nếu bạn vẫn tick,
+          nhưng hãy cân nhắc.
         </div>
       )}
     </Modal>
