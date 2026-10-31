@@ -100,13 +100,34 @@ export default function OutputInvoiceImport({ partners, products, onClose, onDon
   }
 
   async function saveAll() {
+    if (saving) return   // chống bấm 2 lần
     setErr(''); setSaving(true); setResult(null)
     const cacheRetail = {}, cacheByMst = new Map()
     let written = 0, skipped = 0, failed = 0
     try {
-      for (let i = 0; i < invoices.length; i++) {
-        const inv = invoices[i]
-        if (i % 20 === 0) setProgress(`Đang ghi ${i + 1}/${invoices.length}…`)
+      // B1: hỏi DB những số hóa đơn bán ra ĐÃ CÓ, để BỎ QUA hẳn (không gửi lên rồi mới bị từ chối).
+      setProgress('Đang kiểm tra hóa đơn đã có…')
+      const existing = new Set()
+      const allNos = invoices.map((v) => v.invoice_no)
+      // chia lô 500 để truy vấn in(...) không quá dài
+      for (let s = 0; s < allNos.length; s += 500) {
+        const chunk = allNos.slice(s, s + 500)
+        // eslint-disable-next-line no-await-in-loop
+        const { data } = await supabase.from('invoices')
+          .select('invoice_no').eq('direction', 'out').in('invoice_no', chunk)
+        for (const r of data || []) existing.add(r.invoice_no)
+      }
+      const todo = invoices.filter((v) => !existing.has(v.invoice_no))
+      skipped = invoices.length - todo.length
+      if (todo.length === 0) {
+        setResult({ written: 0, skipped, failed: 0 })
+        setProgress(''); setSaving(false); onDone?.()
+        return
+      }
+
+      for (let i = 0; i < todo.length; i++) {
+        const inv = todo[i]
+        if (i % 20 === 0) setProgress(`Đang ghi ${i + 1}/${todo.length}…`)
         // eslint-disable-next-line no-await-in-loop
         const partnerId = await resolveCustomer(inv, cacheRetail, cacheByMst)
 
