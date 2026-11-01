@@ -24,6 +24,7 @@ export default function Layout() {
           <NavLink to="/invoices-out" className={link}>Hóa đơn đầu ra</NavLink>
           <NavLink to="/inventory" className={link}>Tồn kho</NavLink>
           <NavLink to="/bank" className={link}>Tài khoản ngân hàng</NavLink>
+          <NavLink to="/expenses" className={link}>Chi phí</NavLink>
           <NavLink to="/shopee" className={link}>Đối soát Shopee</NavLink>
 
           <div className="group-label">Báo cáo</div>
