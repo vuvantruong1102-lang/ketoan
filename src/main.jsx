@@ -9,7 +9,8 @@ import Partners from './pages/Partners'
 import Products from './pages/Products'
 import InvoicesIn from './pages/InvoicesIn'
 import InvoicesOut from './pages/InvoicesOut'
-import Reports from './pages/Reports'
+import ProfitReport from './pages/ProfitReport'
+import VatReport from './pages/VatReport'
 import ShopeeAffiliate from './pages/ShopeeAffiliate'
 import './index.css'
 
@@ -48,7 +49,8 @@ function App() {
           <Suspense fallback={<div className="spin">Đang tải…</div>}><BankAccounts /></Suspense>
         } />
         <Route path="shopee" element={<ShopeeAffiliate />} />
-        <Route path="reports" element={<Reports />} />
+        <Route path="profit" element={<ProfitReport />} />
+        <Route path="vat" element={<VatReport />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
