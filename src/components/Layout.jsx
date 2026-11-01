@@ -20,7 +20,8 @@ export default function Layout() {
           <NavLink to="/products" className={link}>Sản phẩm</NavLink>
 
           <div className="group-label">Nghiệp vụ</div>
-          <NavLink to="/invoices" className={link}>Hóa đơn</NavLink>
+          <NavLink to="/invoices-in" className={link}>Hóa đơn đầu vào</NavLink>
+          <NavLink to="/invoices-out" className={link}>Hóa đơn đầu ra</NavLink>
           <NavLink to="/inventory" className={link}>Tồn kho</NavLink>
           <NavLink to="/bank" className={link}>Tài khoản ngân hàng</NavLink>
           <NavLink to="/shopee" className={link}>Đối soát Shopee</NavLink>
