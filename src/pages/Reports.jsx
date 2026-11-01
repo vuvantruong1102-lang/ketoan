@@ -66,6 +66,20 @@ export default function Reports() {
     load()
   }
 
+  async function reopenPeriod() {
+    if (!confirm(
+      `Mở lại kỳ ${year}/Q${quarter}?\n\n` +
+      'Kỳ sẽ được bỏ khóa để bạn sửa dữ liệu (nhập tồn đầu kỳ, hóa đơn...). ' +
+      'Kết quả giá vốn đã chốt sẽ bị xóa; chốt lại sau khi sửa xong.'
+    )) return
+    setBusy(true); setErr(''); setOk('')
+    const { error } = await supabase.rpc('reopen_period', { p_year: Number(year), p_quarter: Number(quarter) })
+    setBusy(false)
+    if (error) { setErr(error.message); return }
+    setOk(`Đã mở lại kỳ ${year}/Q${quarter}. Sửa dữ liệu rồi chốt kỳ lại.`)
+    load()
+  }
+
   const isClosed = period?.status === 'closed'
 
   return (
@@ -96,7 +110,12 @@ export default function Reports() {
         </div>
         <div style={{ marginLeft: 'auto' }}>
           {isClosed ? (
-            <span className="badge closed">Đã chốt kỳ</span>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <span className="badge closed">Đã chốt kỳ</span>
+              <button className="btn ghost sm" onClick={reopenPeriod} disabled={busy}>
+                {busy ? 'Đang mở…' : 'Mở lại kỳ'}
+              </button>
+            </div>
           ) : (
             <button className="btn accent" onClick={closePeriod} disabled={busy}>
               {busy ? 'Đang chốt…' : `Chốt kỳ ${year}/Q${quarter}`}
