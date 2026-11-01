@@ -105,19 +105,20 @@ export default function OutputInvoiceImport({ partners, products, onClose, onDon
     const cacheRetail = {}, cacheByMst = new Map()
     let written = 0, skipped = 0, failed = 0
     try {
-      // B1: hỏi DB những số hóa đơn bán ra ĐÃ CÓ, để BỎ QUA hẳn (không gửi lên rồi mới bị từ chối).
+      // B1: hỏi DB những hóa đơn bán ra ĐÃ CÓ để BỎ QUA. Khóa nhận dạng là
+      // (số HĐ + ngày + ký hiệu) — vì số HĐ không duy nhất giữa các ký hiệu.
       setProgress('Đang kiểm tra hóa đơn đã có…')
       const existing = new Set()
-      const allNos = invoices.map((v) => v.invoice_no)
-      // chia lô 500 để truy vấn in(...) không quá dài
+      const idKey = (no, date, sym) => `${no}|${date}|${sym || ''}`
+      const allNos = [...new Set(invoices.map((v) => v.invoice_no))]
       for (let s = 0; s < allNos.length; s += 500) {
         const chunk = allNos.slice(s, s + 500)
         // eslint-disable-next-line no-await-in-loop
         const { data } = await supabase.from('invoices')
-          .select('invoice_no').eq('direction', 'out').in('invoice_no', chunk)
-        for (const r of data || []) existing.add(r.invoice_no)
+          .select('invoice_no, invoice_date, symbol').eq('direction', 'out').in('invoice_no', chunk)
+        for (const r of data || []) existing.add(idKey(r.invoice_no, r.invoice_date, r.symbol))
       }
-      const todo = invoices.filter((v) => !existing.has(v.invoice_no))
+      const todo = invoices.filter((v) => !existing.has(idKey(v.invoice_no, v.invoice_date, v.symbol)))
       skipped = invoices.length - todo.length
       if (todo.length === 0) {
         setResult({ written: 0, skipped, failed: 0 })
@@ -135,6 +136,7 @@ export default function OutputInvoiceImport({ partners, products, onClose, onDon
         // eslint-disable-next-line no-await-in-loop
         const { data: head, error: e1 } = await supabase.from('invoices').insert({
           direction: 'out',
+          symbol: inv.symbol || null,
           invoice_no: inv.invoice_no,
           invoice_date: inv.invoice_date,
           partner_id: partnerId,

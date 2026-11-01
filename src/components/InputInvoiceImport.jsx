@@ -75,14 +75,15 @@ export default function InputInvoiceImport({ partners, onClose, onDone }) {
       // bỏ qua hóa đơn đã có (trùng số + chiều in)
       setProgress('Đang kiểm tra hóa đơn đã có…')
       const existing = new Set()
-      const nos = invoices.map((v) => v.invoice_no)
+      const idKey = (no, date) => `${no}|${date}`
+      const nos = [...new Set(invoices.map((v) => v.invoice_no))]
       for (let s = 0; s < nos.length; s += 500) {
         // eslint-disable-next-line no-await-in-loop
         const { data } = await supabase.from('invoices')
-          .select('invoice_no').eq('direction', 'in').in('invoice_no', nos.slice(s, s + 500))
-        for (const r of data || []) existing.add(r.invoice_no)
+          .select('invoice_no, invoice_date').eq('direction', 'in').in('invoice_no', nos.slice(s, s + 500))
+        for (const r of data || []) existing.add(idKey(r.invoice_no, r.invoice_date))
       }
-      const todo = invoices.filter((v) => !existing.has(v.invoice_no))
+      const todo = invoices.filter((v) => !existing.has(idKey(v.invoice_no, v.invoice_date)))
       skipped = invoices.length - todo.length
       if (todo.length === 0) {
         setResult({ written: 0, skipped, failed: 0 }); setProgress(''); setSaving(false); onDone?.(); return
