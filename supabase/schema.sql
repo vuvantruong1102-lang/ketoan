@@ -121,13 +121,14 @@ create table invoice_items (
   invoice_id    bigint not null references invoices(id) on delete cascade,
   product_id    bigint references products(id),
   description   text,                            -- diễn giải (dịch vụ có thể không có SKU)
-  quantity      numeric(18,4) not null default 1 check (quantity >= 0),
-  unit_price    numeric(18,4) not null default 0 check (unit_price >= 0),  -- đơn giá chưa thuế
+  -- Cho phép SỐ ÂM để phục vụ hóa đơn điều chỉnh giảm (SL/tiền/thuế âm).
+  quantity      numeric(18,4) not null default 1,
+  unit_price    numeric(18,4) not null default 0,  -- đơn giá chưa thuế
   vat_rate      numeric(5,2)  not null default 8 check (vat_rate in (0,5,8,10)),
   -- GHI ĐÈ THỦ CÔNG (tùy chọn): để NULL = tự tính; điền số = dùng đúng số này.
-  -- Dùng khi số trên hóa đơn NCC lệch do cách làm tròn khác nhau.
-  amount_override numeric(18,2) check (amount_override is null or amount_override >= 0),
-  tax_override    numeric(18,2) check (tax_override    is null or tax_override    >= 0),
+  -- Dùng khi số trên hóa đơn NCC lệch do làm tròn, hoặc hóa đơn điều chỉnh (âm).
+  amount_override numeric(18,2),
+  tax_override    numeric(18,2),
   -- các cột dưới tự tính bằng trigger (ưu tiên số ghi đè nếu có)
   line_before_tax numeric(18,2) not null default 0,  -- quantity * unit_price (hoặc amount_override)
   line_tax        numeric(18,2) not null default 0,  -- line_before_tax * vat_rate/100 (hoặc tax_override)
@@ -371,19 +372,23 @@ begin
     avg_unit_cost, sold_qty, cogs_value, closing_qty, closing_value)
   select
     p.id, p_year, p_quarter,
-    o.qty, o.val, pu.qty, pu.val,
+    coalesce(o.qty,0), coalesce(o.val,0), coalesce(pu.qty,0), coalesce(pu.val,0),
     -- đơn giá bình quân gia quyền cuối kỳ
-    case when (o.qty + pu.qty) > 0
-         then round((o.val + pu.val) / (o.qty + pu.qty), 4) else 0 end as avg_cost,
-    sa.qty,
-    round(sa.qty * case when (o.qty+pu.qty)>0
-         then (o.val+pu.val)/(o.qty+pu.qty) else 0 end, 2) as cogs,
-    (o.qty + pu.qty - sa.qty) as close_qty,
-    round((o.qty + pu.qty - sa.qty) * case when (o.qty+pu.qty)>0
-         then (o.val+pu.val)/(o.qty+pu.qty) else 0 end, 2) as close_val
+    case when (coalesce(o.qty,0) + coalesce(pu.qty,0)) > 0
+         then round((coalesce(o.val,0) + coalesce(pu.val,0))
+                    / (coalesce(o.qty,0) + coalesce(pu.qty,0)), 4) else 0 end as avg_cost,
+    coalesce(sa.qty,0),
+    round(coalesce(sa.qty,0) * case when (coalesce(o.qty,0)+coalesce(pu.qty,0))>0
+         then (coalesce(o.val,0)+coalesce(pu.val,0))
+              /(coalesce(o.qty,0)+coalesce(pu.qty,0)) else 0 end, 2) as cogs,
+    (coalesce(o.qty,0) + coalesce(pu.qty,0) - coalesce(sa.qty,0)) as close_qty,
+    round((coalesce(o.qty,0) + coalesce(pu.qty,0) - coalesce(sa.qty,0))
+          * case when (coalesce(o.qty,0)+coalesce(pu.qty,0))>0
+         then (coalesce(o.val,0)+coalesce(pu.val,0))
+              /(coalesce(o.qty,0)+coalesce(pu.qty,0)) else 0 end, 2) as close_val
   from products p
   left join lateral (
-    select coalesce(quantity,0) qty, coalesce(quantity*unit_cost,0) val
+    select quantity qty, quantity*unit_cost val
     from inventory_opening
     where product_id=p.id and year=p_year and quarter=p_quarter
   ) o on true
