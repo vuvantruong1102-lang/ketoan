@@ -7,6 +7,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Partners from './pages/Partners'
 import Products from './pages/Products'
+import Expenses from './pages/Expenses'
 import InvoicesIn from './pages/InvoicesIn'
 import InvoicesOut from './pages/InvoicesOut'
 import ProfitReport from './pages/ProfitReport'
@@ -48,6 +49,7 @@ function App() {
         <Route path="bank" element={
           <Suspense fallback={<div className="spin">Đang tải…</div>}><BankAccounts /></Suspense>
         } />
+        <Route path="expenses" element={<Expenses />} />
         <Route path="shopee" element={<ShopeeAffiliate />} />
         <Route path="profit" element={<ProfitReport />} />
         <Route path="vat" element={<VatReport />} />
