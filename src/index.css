@@ -335,7 +335,7 @@ input[type="checkbox"] { width: auto; }
 
 .shopee-cols {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 0.8fr 1.3fr;
   gap: 16px;
   align-items: start;
 }
