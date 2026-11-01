@@ -10,6 +10,8 @@ export default function ShopeeAffiliate() {
   const [recs, setRecs] = useState(null)        // bảng 3: đối soát
   const [err, setErr] = useState('')
   const [expanded, setExpanded] = useState(null) // mã thanh toán đang mở chi tiết
+  // tìm tổng hoa hồng theo khoảng ngày (panel 2)
+  const [searchRange, setSearchRange] = useState({ from: '', to: '' })
 
   // form bảng 1
   const [f1, setF1] = useState({ tx_date: today(), amount: '', payment_code: '' })
@@ -71,12 +73,18 @@ export default function ShopeeAffiliate() {
     })
   }, [rows])
 
+  // tổng hoa hồng từ đầu đến nay
+  const grandTotal = useMemo(
+    () => (rows || []).reduce((s, r) => s + Number(r.amount), 0), [rows])
+
   // ---- Bảng 3: đối soát ----
   function sumInRange(from, to) {
     if (!from || !to) return 0
     return (rows || []).reduce((s, r) =>
       (r.tx_date >= from && r.tx_date <= to) ? s + Number(r.amount) : s, 0)
   }
+  // tổng hoa hồng theo khoảng tìm kiếm ở panel 2
+  const searchTotal = sumInRange(searchRange.from, searchRange.to)
   // tổng tự nhập theo khoảng đang nhập ở form (xem trước)
   const f3MyTotal = sumInRange(f3.period_from, f3.period_to)
   const f3Diff = f3MyTotal - Number(f3.shopee_amount || 0)
@@ -159,6 +167,30 @@ export default function ShopeeAffiliate() {
 
           {/* ---------- BẢNG 2 ---------- */}
           <Panel title="2 · Gom theo mã thanh toán">
+            {/* tổng hoa hồng từ đầu đến nay */}
+            <div className="alert" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+              Tổng hoa hồng đã nhận (từ đầu): <b>{vnd(grandTotal)}</b>
+            </div>
+
+            {/* tìm tổng hoa hồng theo khoảng ngày */}
+            <div className="row c2" style={{ marginBottom: 8 }}>
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label>Từ ngày</label>
+                <input type="date" value={searchRange.from}
+                  onChange={(e) => setSearchRange({ ...searchRange, from: e.target.value })} />
+              </div>
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label>Đến ngày</label>
+                <input type="date" value={searchRange.to}
+                  onChange={(e) => setSearchRange({ ...searchRange, to: e.target.value })} />
+              </div>
+            </div>
+            {searchRange.from && searchRange.to && (
+              <div className="alert" style={{ background: '#f7f9fb', color: 'var(--ink)', fontSize: 13 }}>
+                Tổng hoa hồng trong khoảng: <b>{vnd(searchTotal)}</b>
+              </div>
+            )}
+
             {grouped.length === 0 ? <Empty>Chưa có dữ liệu.</Empty> : (
               <table className="grid">
                 <thead>
@@ -239,23 +271,26 @@ export default function ShopeeAffiliate() {
               <thead>
                 <tr>
                   <th>Ngày ĐS</th><th>Khoảng</th>
-                  <th className="num">Shopee</th><th className="num">Chênh</th>
+                  <th className="num">Hoa hồng</th>
+                  <th className="num">Shopee TT</th>
+                  <th className="num">Chênh</th>
                   <th style={{ width: 28 }}></th>
                 </tr>
               </thead>
               <tbody>
                 {recs.length === 0 ? (
-                  <tr><td colSpan={5}><Empty>Chưa có đối soát.</Empty></td></tr>
+                  <tr><td colSpan={6}><Empty>Chưa có đối soát.</Empty></td></tr>
                 ) : recs.map((r) => {
-                  const my = sumInRange(r.period_from, r.period_to)
+                  const my = sumInRange(r.period_from, r.period_to)  // hoa hồng theo khoảng
                   const diff = my - Number(r.shopee_amount)
                   return (
                     <tr key={r.id}>
                       <td>{dmy(r.reconcile_date)}</td>
                       <td style={{ fontSize: 12 }}>{dmy(r.period_from)}<br />→ {dmy(r.period_to)}</td>
+                      <td className="num">{vnd(my)}</td>
                       <td className="num">{vnd(r.shopee_amount)}</td>
                       <td className="num">
-                        <span className={diff === 0 ? 'pos' : 'neg'} title={`Bạn nhập: ${vnd(my)}`}>
+                        <span className={diff === 0 ? 'pos' : 'neg'}>
                           {diff > 0 ? '+' : ''}{vnd(diff)}
                         </span>
                       </td>
