@@ -4,7 +4,7 @@ import { Panel, Alert, Empty, Loading, Modal } from '../components/ui'
 import InvoiceImport from '../components/InvoiceImport'
 // Tải lười: kéo theo xlsx (nặng), chỉ nạp khi mở modal import đầu ra.
 const OutputInvoiceImport = lazy(() => import('../components/OutputInvoiceImport'))
-import { exportVatPurchaseListing } from '../lib/exportVatListing'
+import { exportVatPurchaseListing, exportVatSaleListing } from '../lib/exportVatListing'
 import { vnd, dmy, recentYears } from '../lib/format'
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -30,10 +30,13 @@ export default function Invoices() {
   const [saving, setSaving] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showOutImport, setShowOutImport] = useState(false)
+  // số dòng hiển thị mỗi panel (bấm "hiện thêm" để tăng)
+  const PAGE = 20
+  const [visIn, setVisIn] = useState(PAGE)
+  const [visOut, setVisOut] = useState(PAGE)
 
   // filters
   const yNow = new Date().getFullYear()
-  const [fDir, setFDir] = useState('')
   const [fYear, setFYear] = useState(yNow)
   const [fQuarter, setFQuarter] = useState('')
 
@@ -62,7 +65,6 @@ export default function Invoices() {
       .order('invoice_date', { ascending: false })
       .order('id', { ascending: false })
       .limit(5000)   // nới trần để hiện đủ hóa đơn trong kỳ
-    if (fDir) query = query.eq('direction', fDir)
 
     const { data, error } = await query
     if (error) { setErr(error.message); return }
@@ -79,7 +81,7 @@ export default function Invoices() {
   }
 
   useEffect(() => { loadRefs() }, [])
-  useEffect(() => { load() }, [fDir, fYear, fQuarter])
+  useEffect(() => { load(); setVisIn(PAGE); setVisOut(PAGE) }, [fYear, fQuarter])
 
   function openNew() {
     setHead(blankHead()); setLines([blankLine()]); setEditing('new')
@@ -209,6 +211,69 @@ export default function Invoices() {
     head.direction === 'in' ? p.is_supplier : p.is_customer
   )
 
+  // Render một panel hóa đơn (đầu vào hoặc đầu ra) với phân trang "hiện thêm".
+  function renderInvoicePanel({ title, dir, vis, setVis, actions }) {
+    const list = (rows || []).filter((r) => r.direction === dir)
+    const shown = list.slice(0, vis)
+    return (
+      <Panel title={`${title} (${list.length})`} actions={actions}>
+        {list.length === 0 ? (
+          <Empty>Không có hóa đơn nào trong kỳ đã chọn.</Empty>
+        ) : (
+          <>
+            <table className="grid">
+              <thead>
+                <tr>
+                  <th style={{ width: 92 }}>Ngày</th><th style={{ width: 100 }}>Số HĐ</th>
+                  <th>{dir === 'in' ? 'Nhà cung cấp' : 'Khách hàng'}</th>
+                  <th style={{ width: 90 }}>Loại</th>
+                  {dir === 'in' && <th style={{ width: 90 }}>Khấu trừ</th>}
+                  <th className="num" style={{ width: 130 }}>Chưa thuế</th>
+                  <th className="num" style={{ width: 120 }}>Thuế</th>
+                  <th className="num" style={{ width: 130 }}>Tổng</th>
+                  <th style={{ width: 80 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((r) => (
+                  <tr key={r.id}>
+                    <td>{dmy(r.invoice_date)}</td>
+                    <td>{r.invoice_no || <span className="muted">—</span>}</td>
+                    <td>{r.partners?.name || <span className="muted">—</span>}</td>
+                    <td>
+                      <span className={`badge ${r.category}`}>
+                        {r.category === 'goods' ? 'Hàng hóa' : 'Dịch vụ'}
+                      </span>
+                    </td>
+                    {dir === 'in' && (
+                      <td>{r.vat_deductible
+                        ? <span className="muted">Được</span>
+                        : <span className="neg">Không</span>}</td>
+                    )}
+                    <td className="num" style={{ whiteSpace: 'nowrap' }}>{vnd(r.amount_before_tax)}</td>
+                    <td className="num" style={{ whiteSpace: 'nowrap' }}>{vnd(r.tax_amount)}</td>
+                    <td className="num" style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{vnd(r.amount_total)}</td>
+                    <td>
+                      <button className="icon-btn" onClick={() => openEdit(r)}>Sửa</button>
+                      <button className="icon-btn del" onClick={() => remove(r)}>Xóa</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {vis < list.length && (
+              <div style={{ textAlign: 'center', marginTop: 12 }}>
+                <button className="btn ghost sm" onClick={() => setVis(vis + PAGE)}>
+                  Hiện thêm ({list.length - vis} còn lại)
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </Panel>
+    )
+  }
+
   // Xuất bảng kê hóa đơn mua vào (mẫu PL 01-1/GTGT) theo kỳ đang lọc.
   function exportListing() {
     setErr('')
@@ -229,17 +294,44 @@ export default function Invoices() {
     })
   }
 
+  // Xuất bảng kê hóa đơn bán ra (mẫu PL 01-2/GTGT) theo kỳ đang lọc.
+  function exportSaleListing() {
+    setErr('')
+    const outs = (rows || []).filter((r) => r.direction === 'out')
+    if (outs.length === 0) { setErr('Không có hóa đơn bán ra trong kỳ đã chọn để xuất.'); return }
+    const data = outs.map((r) => {
+      const before = Number(r.amount_before_tax || 0)
+      const tax = Number(r.tax_amount || 0)
+      // suy thuế suất từ tỉ lệ thuế/doanh thu (để phân nhóm). 0 nếu không có thuế.
+      let rate = null
+      if (before > 0) {
+        const pct = Math.round((tax / before) * 100)
+        rate = [0, 5, 8, 10].includes(pct) ? pct : (pct === 0 ? 0 : 8)
+      } else if (tax === 0) rate = 0
+      return {
+        invoice_no: r.invoice_no,
+        invoice_date: r.invoice_date,
+        buyer_name: r.partners?.name || '',
+        buyer_tax_code: r.partners?.tax_code || '',
+        amount_before_tax: before,
+        tax_amount: tax,
+        vat_rate: rate,
+      }
+    })
+    exportVatSaleListing(data, {
+      year: Number(fYear),
+      quarter: fQuarter ? Number(fQuarter) : undefined,
+    })
+  }
+
   return (
     <>
       <div className="page-head">
         <div>
-          <h1>Hóa đơn đầu vào</h1>
-          <div className="sub">Nhập hóa đơn mua vào và bán ra. Thuế và tổng tiền tự tính.</div>
+          <h1>Hóa đơn</h1>
+          <div className="sub">Hóa đơn mua vào và bán ra, tách riêng hai panel. Thuế và tổng tiền tự tính.</div>
         </div>
         <div className="btn-row">
-          <button className="btn ghost" onClick={() => setShowOutImport(true)}>Import hóa đơn đầu ra (Excel)</button>
-          <button className="btn ghost" onClick={exportListing}>Xuất bảng kê mua vào (Excel)</button>
-          <button className="btn ghost" onClick={() => setShowImport(true)}>Import PDF / XML</button>
           <button className="btn" onClick={openNew}>+ Nhập hóa đơn</button>
         </div>
       </div>
@@ -247,14 +339,6 @@ export default function Invoices() {
       <Alert>{err}</Alert>
 
       <div className="toolbar">
-        <div className="field">
-          <label>Chiều</label>
-          <select value={fDir} onChange={(e) => setFDir(e.target.value)}>
-            <option value="">Tất cả</option>
-            <option value="in">Mua vào</option>
-            <option value="out">Bán ra</option>
-          </select>
-        </div>
         <div className="field">
           <label>Năm</label>
           <select value={fYear} onChange={(e) => setFYear(e.target.value)}>
@@ -271,55 +355,35 @@ export default function Invoices() {
         </div>
       </div>
 
-      <Panel>
-        {rows === null ? <Loading /> : rows.length === 0 ? (
-          <Empty>Không có hóa đơn nào trong kỳ đã chọn.</Empty>
-        ) : (
-          <table className="grid">
-            <thead>
-              <tr>
-                <th>Ngày</th><th>Số HĐ</th><th>Chiều</th><th>Đối tác</th>
-                <th>Loại</th><th>Khấu trừ</th>
-                <th className="num">Chưa thuế</th><th className="num">Thuế</th>
-                <th className="num">Tổng</th><th style={{ width: 80 }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id}>
-                  <td>{dmy(r.invoice_date)}</td>
-                  <td>{r.invoice_no || <span className="muted">—</span>}</td>
-                  <td>
-                    <span className={`badge ${r.direction}`}>
-                      {r.direction === 'in' ? 'Mua' : 'Bán'}
-                    </span>
-                  </td>
-                  <td>{r.partners?.name || <span className="muted">—</span>}</td>
-                  <td>
-                    <span className={`badge ${r.category}`}>
-                      {r.category === 'goods' ? 'Hàng hóa' : 'Dịch vụ'}
-                    </span>
-                  </td>
-                  <td>
-                    {r.direction === 'in'
-                      ? (r.vat_deductible
-                        ? <span className="muted">Được</span>
-                        : <span className="neg">Không</span>)
-                      : <span className="muted">—</span>}
-                  </td>
-                  <td className="num">{vnd(r.amount_before_tax)}</td>
-                  <td className="num">{vnd(r.tax_amount)}</td>
-                  <td className="num" style={{ fontWeight: 600 }}>{vnd(r.amount_total)}</td>
-                  <td>
-                    <button className="icon-btn" onClick={() => openEdit(r)}>Sửa</button>
-                    <button className="icon-btn del" onClick={() => remove(r)}>Xóa</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </Panel>
+      {rows === null ? <Loading /> : (
+        <>
+          {/* ---------- HÓA ĐƠN ĐẦU VÀO ---------- */}
+          {renderInvoicePanel({
+            title: 'Hóa đơn đầu vào',
+            dir: 'in',
+            vis: visIn, setVis: setVisIn,
+            actions: (
+              <div className="btn-row">
+                <button className="btn ghost sm" onClick={() => setShowImport(true)}>Import PDF / XML</button>
+                <button className="btn ghost sm" onClick={exportListing}>Xuất bảng kê mua vào</button>
+              </div>
+            ),
+          })}
+
+          {/* ---------- HÓA ĐƠN ĐẦU RA ---------- */}
+          {renderInvoicePanel({
+            title: 'Hóa đơn đầu ra',
+            dir: 'out',
+            vis: visOut, setVis: setVisOut,
+            actions: (
+              <div className="btn-row">
+                <button className="btn ghost sm" onClick={() => setShowOutImport(true)}>Import Excel</button>
+                <button className="btn ghost sm" onClick={exportSaleListing}>Xuất bảng kê bán ra</button>
+              </div>
+            ),
+          })}
+        </>
+      )}
 
       {editing && (
         <Modal
