@@ -62,7 +62,7 @@ export default function Dashboard() {
               <li>Nhập <Link to="/inventory">tồn kho đầu kỳ</Link> cho quý (nhập tay hoặc import Excel).</li>
               <li>Nhập <Link to="/invoices-in">hóa đơn đầu vào</Link> và <Link to="/invoices-out">đầu ra</Link> phát sinh trong quý.</li>
               <li>Ghi <Link to="/bank">giao dịch tài khoản ngân hàng</Link> để theo dõi số dư.</li>
-              <li>Cuối quý, vào <Link to="/reports">Báo cáo</Link> bấm “Chốt kỳ” để tính giá vốn và lợi nhuận chính thức.</li>
+              <li>Cuối quý, vào <Link to="/profit">Kết quả kinh doanh</Link> bấm “Chốt kỳ” để tính giá vốn và lợi nhuận chính thức.</li>
             </ol>
           </Panel>
 
