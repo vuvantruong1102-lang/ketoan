@@ -4,6 +4,7 @@ import { Panel, Alert, Empty, Loading, Modal } from '../components/ui'
 import InvoiceImport from '../components/InvoiceImport'
 // Tải lười: kéo theo xlsx (nặng), chỉ nạp khi mở modal import đầu ra.
 const OutputInvoiceImport = lazy(() => import('../components/OutputInvoiceImport'))
+const InputInvoiceImport = lazy(() => import('../components/InputInvoiceImport'))
 import { exportVatPurchaseListing, exportVatSaleListing } from '../lib/exportVatListing'
 import { vnd, dmy, recentYears } from '../lib/format'
 
@@ -31,6 +32,7 @@ export default function Invoices({ direction = 'in' }) {
   const [saving, setSaving] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showOutImport, setShowOutImport] = useState(false)
+  const [showInImport, setShowInImport] = useState(false)
   // số dòng hiển thị (bấm "hiện thêm" để tăng)
   const PAGE = 20
   const [vis, setVis] = useState(PAGE)
@@ -351,6 +353,7 @@ export default function Invoices({ direction = 'in' }) {
             </>
           ) : (
             <>
+              <button className="btn ghost" onClick={() => setShowInImport(true)}>Import Excel</button>
               <button className="btn ghost" onClick={() => setShowImport(true)}>Import PDF / XML</button>
               <button className="btn ghost" onClick={exportListing}>Xuất bảng kê mua vào</button>
             </>
@@ -571,6 +574,16 @@ export default function Invoices({ direction = 'in' }) {
             partners={partners}
             products={products}
             onClose={() => setShowOutImport(false)}
+            onDone={() => { loadRefs(); load() }}
+          />
+        </Suspense>
+      )}
+
+      {showInImport && (
+        <Suspense fallback={<div className="spin">Đang tải…</div>}>
+          <InputInvoiceImport
+            partners={partners}
+            onClose={() => setShowInImport(false)}
             onDone={() => { loadRefs(); load() }}
           />
         </Suspense>
