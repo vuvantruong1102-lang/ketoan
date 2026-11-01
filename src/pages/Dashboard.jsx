@@ -60,7 +60,7 @@ export default function Dashboard() {
             <ol style={{ lineHeight: 1.9, paddingLeft: 20 }}>
               <li>Khai báo <Link to="/partners">đối tác</Link> và <Link to="/products">sản phẩm</Link> (chỉ làm một lần, bổ sung dần).</li>
               <li>Nhập <Link to="/inventory">tồn kho đầu kỳ</Link> cho quý (nhập tay hoặc import Excel).</li>
-              <li>Nhập <Link to="/invoices">hóa đơn</Link> mua vào và bán ra phát sinh trong quý.</li>
+              <li>Nhập <Link to="/invoices-in">hóa đơn đầu vào</Link> và <Link to="/invoices-out">đầu ra</Link> phát sinh trong quý.</li>
               <li>Ghi <Link to="/bank">giao dịch tài khoản ngân hàng</Link> để theo dõi số dư.</li>
               <li>Cuối quý, vào <Link to="/reports">Báo cáo</Link> bấm “Chốt kỳ” để tính giá vốn và lợi nhuận chính thức.</li>
             </ol>

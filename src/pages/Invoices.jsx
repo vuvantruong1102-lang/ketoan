@@ -9,8 +9,8 @@ import { vnd, dmy, recentYears } from '../lib/format'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
-const blankHead = () => ({
-  direction: 'in', invoice_no: '', invoice_date: today(),
+const blankHead = (dir = 'in') => ({
+  direction: dir, invoice_no: '', invoice_date: today(),
   partner_id: '', category: 'goods', vat_deductible: true, description: '',
 })
 const blankLine = () => ({
@@ -19,21 +19,21 @@ const blankLine = () => ({
   amount_override: '', tax_override: '',
 })
 
-export default function Invoices() {
+export default function Invoices({ direction = 'in' }) {
+  const isOut = direction === 'out'
   const [rows, setRows] = useState(null)
   const [partners, setPartners] = useState([])
   const [products, setProducts] = useState([])
   const [err, setErr] = useState('')
   const [editing, setEditing] = useState(null)
-  const [head, setHead] = useState(blankHead())
+  const [head, setHead] = useState(blankHead(direction))
   const [lines, setLines] = useState([blankLine()])
   const [saving, setSaving] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showOutImport, setShowOutImport] = useState(false)
-  // số dòng hiển thị mỗi panel (bấm "hiện thêm" để tăng)
+  // số dòng hiển thị (bấm "hiện thêm" để tăng)
   const PAGE = 20
-  const [visIn, setVisIn] = useState(PAGE)
-  const [visOut, setVisOut] = useState(PAGE)
+  const [vis, setVis] = useState(PAGE)
 
   // filters
   const yNow = new Date().getFullYear()
@@ -58,8 +58,9 @@ export default function Invoices() {
       to = `${y + 1}-01-01`
     }
 
-    let query = supabase.from('invoices')
+    const query = supabase.from('invoices')
       .select('*, partners(name, tax_code)')
+      .eq('direction', direction)
       .gte('invoice_date', from)
       .lt('invoice_date', to)
       .order('invoice_date', { ascending: false })
@@ -81,10 +82,10 @@ export default function Invoices() {
   }
 
   useEffect(() => { loadRefs() }, [])
-  useEffect(() => { load(); setVisIn(PAGE); setVisOut(PAGE) }, [fYear, fQuarter])
+  useEffect(() => { load(); setVis(PAGE) }, [fYear, fQuarter, direction])
 
   function openNew() {
-    setHead(blankHead()); setLines([blankLine()]); setEditing('new')
+    setHead(blankHead(direction)); setLines([blankLine()]); setEditing('new')
   }
 
   async function openEdit(r) {
@@ -211,12 +212,12 @@ export default function Invoices() {
     head.direction === 'in' ? p.is_supplier : p.is_customer
   )
 
-  // Render một panel hóa đơn (đầu vào hoặc đầu ra) với phân trang "hiện thêm".
-  function renderInvoicePanel({ title, dir, vis, setVis, actions }) {
+  // Render panel hóa đơn với phân trang "hiện thêm".
+  function renderInvoicePanel({ title, dir }) {
     const list = (rows || []).filter((r) => r.direction === dir)
     const shown = list.slice(0, vis)
     return (
-      <Panel title={`${title} (${list.length})`} actions={actions}>
+      <Panel title={`${title} (${list.length})`}>
         {list.length === 0 ? (
           <Empty>Không có hóa đơn nào trong kỳ đã chọn.</Empty>
         ) : (
@@ -328,10 +329,25 @@ export default function Invoices() {
     <>
       <div className="page-head">
         <div>
-          <h1>Hóa đơn</h1>
-          <div className="sub">Hóa đơn mua vào và bán ra, tách riêng hai panel. Thuế và tổng tiền tự tính.</div>
+          <h1>{isOut ? 'Hóa đơn đầu ra' : 'Hóa đơn đầu vào'}</h1>
+          <div className="sub">
+            {isOut
+              ? 'Hóa đơn bán ra. Thuế đầu ra và doanh thu tự tổng hợp ở Báo cáo.'
+              : 'Hóa đơn mua vào. Thuế đầu vào được khấu trừ tự tổng hợp ở Báo cáo.'}
+          </div>
         </div>
         <div className="btn-row">
+          {isOut ? (
+            <>
+              <button className="btn ghost" onClick={() => setShowOutImport(true)}>Import Excel</button>
+              <button className="btn ghost" onClick={exportSaleListing}>Xuất bảng kê bán ra</button>
+            </>
+          ) : (
+            <>
+              <button className="btn ghost" onClick={() => setShowImport(true)}>Import PDF / XML</button>
+              <button className="btn ghost" onClick={exportListing}>Xuất bảng kê mua vào</button>
+            </>
+          )}
           <button className="btn" onClick={openNew}>+ Nhập hóa đơn</button>
         </div>
       </div>
@@ -355,35 +371,10 @@ export default function Invoices() {
         </div>
       </div>
 
-      {rows === null ? <Loading /> : (
-        <>
-          {/* ---------- HÓA ĐƠN ĐẦU VÀO ---------- */}
-          {renderInvoicePanel({
-            title: 'Hóa đơn đầu vào',
-            dir: 'in',
-            vis: visIn, setVis: setVisIn,
-            actions: (
-              <div className="btn-row">
-                <button className="btn ghost sm" onClick={() => setShowImport(true)}>Import PDF / XML</button>
-                <button className="btn ghost sm" onClick={exportListing}>Xuất bảng kê mua vào</button>
-              </div>
-            ),
-          })}
-
-          {/* ---------- HÓA ĐƠN ĐẦU RA ---------- */}
-          {renderInvoicePanel({
-            title: 'Hóa đơn đầu ra',
-            dir: 'out',
-            vis: visOut, setVis: setVisOut,
-            actions: (
-              <div className="btn-row">
-                <button className="btn ghost sm" onClick={() => setShowOutImport(true)}>Import Excel</button>
-                <button className="btn ghost sm" onClick={exportSaleListing}>Xuất bảng kê bán ra</button>
-              </div>
-            ),
-          })}
-        </>
-      )}
+      {rows === null ? <Loading /> : renderInvoicePanel({
+        title: isOut ? 'Hóa đơn đầu ra' : 'Hóa đơn đầu vào',
+        dir: direction,
+      })}
 
       {editing && (
         <Modal
