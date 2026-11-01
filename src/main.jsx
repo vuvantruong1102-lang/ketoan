@@ -7,7 +7,8 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Partners from './pages/Partners'
 import Products from './pages/Products'
-import Invoices from './pages/Invoices'
+import InvoicesIn from './pages/InvoicesIn'
+import InvoicesOut from './pages/InvoicesOut'
 import Reports from './pages/Reports'
 import ShopeeAffiliate from './pages/ShopeeAffiliate'
 import './index.css'
@@ -38,7 +39,8 @@ function App() {
         <Route index element={<Dashboard />} />
         <Route path="partners" element={<Partners />} />
         <Route path="products" element={<Products />} />
-        <Route path="invoices" element={<Invoices />} />
+        <Route path="invoices-in" element={<InvoicesIn />} />
+        <Route path="invoices-out" element={<InvoicesOut />} />
         <Route path="inventory" element={
           <Suspense fallback={<div className="spin">Đang tải…</div>}><Inventory /></Suspense>
         } />
