@@ -13,10 +13,8 @@ export default function ProfitReport() {
   const [pl, setPl] = useState(null)
   const [cogs, setCogs] = useState([])
   const [period, setPeriod] = useState(null)
-  const [adj, setAdj] = useState({ salary: 0, other_expense: 0 })   // đã lưu
-  const [salaryInput, setSalaryInput] = useState('')
-  const [otherInput, setOtherInput] = useState('')
-  const [savingAdj, setSavingAdj] = useState(false)
+  const [extraExp, setExtraExp] = useState(0)        // tổng chi phí từ panel Chi phí (quý)
+  const [extraByCat, setExtraByCat] = useState([])   // chi phí theo loại (quý)
 
   // --- dữ liệu năm ---
   const [yearData, setYearData] = useState(null)
@@ -25,70 +23,71 @@ export default function ProfitReport() {
   const [ok, setOk] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // khoảng ngày cho năm/quý
+  function rangeOf(y, q) {
+    if (!q) return [`${y}-01-01`, `${y + 1}-01-01`]
+    const m0 = (q - 1) * 3
+    const from = `${y}-${String(m0 + 1).padStart(2, '0')}-01`
+    const nm = m0 + 3
+    const to = nm >= 12 ? `${y + 1}-01-01` : `${y}-${String(nm + 1).padStart(2, '0')}-01`
+    return [from, to]
+  }
+
+  async function fetchExpenses(y, q) {
+    const [from, to] = rangeOf(y, q)
+    const { data } = await supabase.from('expenses').select('amount, category')
+      .gte('exp_date', from).lt('exp_date', to)
+    const list = data || []
+    const total = list.reduce((s, r) => s + Number(r.amount), 0)
+    const m = new Map()
+    for (const r of list) m.set(r.category, (m.get(r.category) || 0) + Number(r.amount))
+    return { total, byCat: Array.from(m.entries()).sort((a, b) => b[1] - a[1]) }
+  }
+
   async function loadQuarter() {
     setErr(''); setOk('')
-    const [plR, cogsR, perR, adjR] = await Promise.all([
+    const [plR, cogsR, perR, exp] = await Promise.all([
       supabase.from('v_pl_by_quarter').select('*').eq('year', year).eq('quarter', quarter).maybeSingle(),
       supabase.from('cogs_period').select('*, products(sku,name)').eq('year', year).eq('quarter', quarter).order('id'),
       supabase.from('periods').select('*').eq('year', year).eq('quarter', quarter).maybeSingle(),
-      supabase.from('pl_adjustments').select('*').eq('year', year).eq('quarter', quarter).maybeSingle(),
+      fetchExpenses(Number(year), Number(quarter)),
     ])
     if (plR.error) setErr(plR.error.message)
     setPl(plR.data || { revenue: 0, cogs: 0, expenses: 0, profit: 0 })
     setCogs(cogsR.data || [])
     setPeriod(perR.data || null)
-    const a = { salary: Number(adjR.data?.salary || 0), other_expense: Number(adjR.data?.other_expense || 0) }
-    setAdj(a)
-    setSalaryInput(a.salary ? String(a.salary) : '')
-    setOtherInput(a.other_expense ? String(a.other_expense) : '')
+    setExtraExp(exp.total)
+    setExtraByCat(exp.byCat)
   }
 
   async function loadYear() {
     setErr('')
     setYearData(null)
-    const [plR, perR, adjR] = await Promise.all([
+    const [plR, perR, exp] = await Promise.all([
       supabase.from('v_pl_by_quarter').select('*').eq('year', year),
       supabase.from('periods').select('*').eq('year', year),
-      supabase.from('pl_adjustments').select('*').eq('year', year),
+      fetchExpenses(Number(year), null),
     ])
     if (plR.error) { setErr(plR.error.message); return }
     const pls = plR.data || []
     const pers = perR.data || []
-    const adjs = adjR.data || []
     const sum = (arr, k) => arr.reduce((s, r) => s + Number(r[k] || 0), 0)
-    const salary = sum(adjs, 'salary')
-    const other = sum(adjs, 'other_expense')
     const revenue = sum(pls, 'revenue')
     const cogsY = sum(pls, 'cogs')
-    const expenses = sum(pls, 'expenses')
-    const profit = revenue - cogsY - expenses
-    // quý nào chưa chốt (để cảnh báo giá vốn thiếu)
+    const invoiceExp = sum(pls, 'expenses')        // chi phí từ hóa đơn đầu vào
+    const extra = exp.total                        // chi phí từ panel Chi phí
+    const totalExp = invoiceExp + extra
+    const profit = revenue - cogsY - totalExp
     const closedQ = new Set(pers.filter((p) => p.status === 'closed').map((p) => p.quarter))
     const unclosed = [1, 2, 3, 4].filter((q) => !closedQ.has(q))
     setYearData({
-      revenue, cogs: cogsY, expenses, profit,
-      salary, other, taxable: profit - salary - other,
-      unclosed,
+      revenue, cogs: cogsY, invoiceExp, extra, totalExp, profit, byCat: exp.byCat, unclosed,
     })
   }
 
   useEffect(() => {
     if (mode === 'quarter') loadQuarter(); else loadYear()
   }, [mode, year, quarter])
-
-  async function saveAdj() {
-    setErr(''); setOk('')
-    setSavingAdj(true)
-    const { error } = await supabase.from('pl_adjustments').upsert({
-      year: Number(year), quarter: Number(quarter),
-      salary: Number(salaryInput || 0), other_expense: Number(otherInput || 0),
-    }, { onConflict: 'year,quarter' })
-    setSavingAdj(false)
-    if (error) { setErr(error.message); return }
-    setAdj({ salary: Number(salaryInput || 0), other_expense: Number(otherInput || 0) })
-    setOk('Đã lưu lương và chi phí khác.')
-    setTimeout(() => setOk(''), 3000)
-  }
 
   async function closePeriod() {
     if (!confirm(`Chốt kỳ ${year}/Q${quarter}?\n\nPhần mềm tính giá vốn và khóa kỳ này.`)) return
@@ -111,9 +110,12 @@ export default function ProfitReport() {
 
   const isClosed = period?.status === 'closed'
 
-  // lợi nhuận chịu thuế quý
-  const qSalary = adj.salary, qOther = adj.other_expense
-  const qTaxable = pl ? (Number(pl.profit) - qSalary - qOther) : 0
+  // Chi phí hóa đơn đầu vào (pl.expenses) + chi phí từ panel Chi phí (extraExp).
+  // Lợi nhuận = doanh thu - giá vốn - (chi phí hóa đơn + chi phí panel).
+  const qInvoiceExp = pl ? Number(pl.expenses) : 0
+  const qRevenue = pl ? Number(pl.revenue) : 0
+  const qCogs = pl ? Number(pl.cogs) : 0
+  const qProfit = qRevenue - qCogs - qInvoiceExp - extraExp
 
   return (
     <>
@@ -176,53 +178,35 @@ export default function ProfitReport() {
           )}
 
           <div className="kpis">
-            <Kpi label="Doanh thu" value={vnd(pl.revenue)} />
-            <Kpi label="Giá vốn hàng bán" value={vnd(pl.cogs)} />
-            <Kpi label="Lợi nhuận" value={vnd(pl.profit)} tone={pl.profit >= 0 ? 'pos' : 'neg'} />
-            <Kpi label="Lợi nhuận chịu thuế" value={vnd(qTaxable)} tone={qTaxable >= 0 ? 'pos' : 'neg'} />
+            <Kpi label="Doanh thu" value={vnd(qRevenue)} />
+            <Kpi label="Giá vốn hàng bán" value={vnd(qCogs)} />
+            <Kpi label="Tổng chi phí" value={vnd(qInvoiceExp + extraExp)} />
+            <Kpi label="Lợi nhuận" value={vnd(qProfit)} tone={qProfit >= 0 ? 'pos' : 'neg'} />
           </div>
 
           <Panel title="Kết quả kinh doanh">
             <table className="grid">
               <tbody>
                 <tr><td>Doanh thu (chưa thuế)</td>
-                  <td className="num" style={{ fontWeight: 600 }}>{vnd(pl.revenue)}</td></tr>
+                  <td className="num" style={{ fontWeight: 600 }}>{vnd(qRevenue)}</td></tr>
                 <tr><td>(−) Giá vốn hàng bán {!isClosed && <span className="muted">· chưa chốt</span>}</td>
-                  <td className="num">{vnd(pl.cogs)}</td></tr>
-                <tr><td>(−) Chi phí (dịch vụ mua vào + thuế không được khấu trừ)</td>
-                  <td className="num">{vnd(pl.expenses)}</td></tr>
+                  <td className="num">{vnd(qCogs)}</td></tr>
+                <tr><td>(−) Chi phí từ hóa đơn đầu vào (dịch vụ mua vào + thuế không khấu trừ)</td>
+                  <td className="num">{vnd(qInvoiceExp)}</td></tr>
+                {extraByCat.map(([cat, v]) => (
+                  <tr key={cat}><td>(−) Chi phí {cat}</td><td className="num">{vnd(v)}</td></tr>
+                ))}
+                {extraByCat.length === 0 && (
+                  <tr><td>(−) Chi phí khác (từ panel Chi phí)</td><td className="num">{vnd(0)}</td></tr>
+                )}
                 <tr style={{ borderTop: '2px solid var(--line-strong)' }}>
-                  <td style={{ fontWeight: 600 }}>Lợi nhuận</td>
-                  <td className={`num ${pl.profit >= 0 ? 'pos' : 'neg'}`} style={{ fontWeight: 600 }}>
-                    {vnd(pl.profit)}</td></tr>
-                <tr><td>(−) Lương</td><td className="num">{vnd(qSalary)}</td></tr>
-                <tr><td>(−) Chi phí khác</td><td className="num">{vnd(qOther)}</td></tr>
-                <tr style={{ borderTop: '2px solid var(--line-strong)' }}>
-                  <td style={{ fontWeight: 700 }}>Lợi nhuận chịu thuế</td>
-                  <td className={`num ${qTaxable >= 0 ? 'pos' : 'neg'}`} style={{ fontWeight: 700 }}>
-                    {vnd(qTaxable)}</td></tr>
+                  <td style={{ fontWeight: 700 }}>Lợi nhuận</td>
+                  <td className={`num ${qProfit >= 0 ? 'pos' : 'neg'}`} style={{ fontWeight: 700 }}>
+                    {vnd(qProfit)}</td></tr>
               </tbody>
             </table>
-
-            <div className="row c3" style={{ marginTop: 14, alignItems: 'end' }}>
-              <div className="field" style={{ marginBottom: 0 }}>
-                <label>Lương (nhập tay)</label>
-                <input type="number" step="any" min="0" value={salaryInput} placeholder="0"
-                  onChange={(e) => setSalaryInput(e.target.value)} />
-              </div>
-              <div className="field" style={{ marginBottom: 0 }}>
-                <label>Chi phí khác (nhập tay)</label>
-                <input type="number" step="any" min="0" value={otherInput} placeholder="0"
-                  onChange={(e) => setOtherInput(e.target.value)} />
-              </div>
-              <div className="field" style={{ marginBottom: 0 }}>
-                <button className="btn sm" onClick={saveAdj} disabled={savingAdj}>
-                  {savingAdj ? 'Đang lưu…' : 'Lưu lương & chi phí khác'}
-                </button>
-              </div>
-            </div>
             <div className="inline-note" style={{ marginTop: 8 }}>
-              Lương và chi phí khác được lưu riêng cho {year}/Q{quarter}.
+              Chi phí bán hàng / quản lý được nhập ở trang <b>Chi phí</b> (menu Nghiệp vụ) và tự cộng vào đây.
             </div>
           </Panel>
 
@@ -269,8 +253,8 @@ export default function ProfitReport() {
           <div className="kpis">
             <Kpi label="Doanh thu cả năm" value={vnd(yearData.revenue)} />
             <Kpi label="Giá vốn cả năm" value={vnd(yearData.cogs)} />
+            <Kpi label="Tổng chi phí" value={vnd(yearData.totalExp)} />
             <Kpi label="Lợi nhuận" value={vnd(yearData.profit)} tone={yearData.profit >= 0 ? 'pos' : 'neg'} />
-            <Kpi label="Lợi nhuận chịu thuế" value={vnd(yearData.taxable)} tone={yearData.taxable >= 0 ? 'pos' : 'neg'} />
           </div>
 
           <Panel title={`Kết quả kinh doanh năm ${year}`}>
@@ -280,22 +264,19 @@ export default function ProfitReport() {
                   <td className="num" style={{ fontWeight: 600 }}>{vnd(yearData.revenue)}</td></tr>
                 <tr><td>(−) Tổng giá vốn hàng bán</td>
                   <td className="num">{vnd(yearData.cogs)}</td></tr>
-                <tr><td>(−) Tổng chi phí</td>
-                  <td className="num">{vnd(yearData.expenses)}</td></tr>
+                <tr><td>(−) Chi phí từ hóa đơn đầu vào</td>
+                  <td className="num">{vnd(yearData.invoiceExp)}</td></tr>
+                {yearData.byCat.map(([cat, v]) => (
+                  <tr key={cat}><td>(−) Chi phí {cat}</td><td className="num">{vnd(v)}</td></tr>
+                ))}
                 <tr style={{ borderTop: '2px solid var(--line-strong)' }}>
-                  <td style={{ fontWeight: 600 }}>Lợi nhuận</td>
-                  <td className={`num ${yearData.profit >= 0 ? 'pos' : 'neg'}`} style={{ fontWeight: 600 }}>
+                  <td style={{ fontWeight: 700 }}>Lợi nhuận cả năm</td>
+                  <td className={`num ${yearData.profit >= 0 ? 'pos' : 'neg'}`} style={{ fontWeight: 700 }}>
                     {vnd(yearData.profit)}</td></tr>
-                <tr><td>(−) Tổng lương</td><td className="num">{vnd(yearData.salary)}</td></tr>
-                <tr><td>(−) Tổng chi phí khác</td><td className="num">{vnd(yearData.other)}</td></tr>
-                <tr style={{ borderTop: '2px solid var(--line-strong)' }}>
-                  <td style={{ fontWeight: 700 }}>Lợi nhuận chịu thuế cả năm</td>
-                  <td className={`num ${yearData.taxable >= 0 ? 'pos' : 'neg'}`} style={{ fontWeight: 700 }}>
-                    {vnd(yearData.taxable)}</td></tr>
               </tbody>
             </table>
             <div className="inline-note" style={{ marginTop: 8 }}>
-              Số cả năm = cộng gộp 4 quý. Lương, chi phí khác lấy từ số đã lưu ở từng quý.
+              Số cả năm = cộng gộp 4 quý. Chi phí bán hàng/quản lý lấy từ trang Chi phí.
             </div>
           </Panel>
         </>
