@@ -58,18 +58,25 @@ export default function Invoices({ direction = 'in' }) {
       to = `${y + 1}-01-01`
     }
 
-    const query = supabase.from('invoices')
-      .select('*, partners(name, tax_code)')
-      .eq('direction', direction)
-      .gte('invoice_date', from)
-      .lt('invoice_date', to)
-      .order('invoice_date', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(5000)   // nới trần để hiện đủ hóa đơn trong kỳ
-
-    const { data, error } = await query
-    if (error) { setErr(error.message); return }
-    setRows(data)
+    // Supabase chặn tối đa 1000 dòng/truy vấn (cấu hình server), nên phải tải
+    // theo LÔ 1000 rồi ghép lại cho đủ cả kỳ (có thể vài nghìn hóa đơn).
+    const BATCH = 1000
+    let all = []
+    for (let offset = 0; ; offset += BATCH) {
+      // eslint-disable-next-line no-await-in-loop
+      const { data, error } = await supabase.from('invoices')
+        .select('*, partners(name, tax_code)')
+        .eq('direction', direction)
+        .gte('invoice_date', from)
+        .lt('invoice_date', to)
+        .order('invoice_date', { ascending: false })
+        .order('id', { ascending: false })
+        .range(offset, offset + BATCH - 1)
+      if (error) { setErr(error.message); return }
+      all = all.concat(data || [])
+      if (!data || data.length < BATCH) break   // hết dữ liệu
+    }
+    setRows(all)
   }
 
   async function loadRefs() {
