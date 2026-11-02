@@ -13,6 +13,7 @@ import InvoicesOut from './pages/InvoicesOut'
 import ProfitReport from './pages/ProfitReport'
 import VatReport from './pages/VatReport'
 import ShopeeAffiliate from './pages/ShopeeAffiliate'
+import AkaReconcile from './pages/AkaReconcile'
 import './index.css'
 
 // Tách riêng các trang kéo theo xlsx (nặng).
@@ -51,6 +52,7 @@ function App() {
         } />
         <Route path="expenses" element={<Expenses />} />
         <Route path="shopee" element={<ShopeeAffiliate />} />
+        <Route path="aka" element={<AkaReconcile />} />
         <Route path="profit" element={<ProfitReport />} />
         <Route path="vat" element={<VatReport />} />
       </Route>
