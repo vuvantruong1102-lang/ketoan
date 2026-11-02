@@ -18,7 +18,7 @@ export default function BankAccounts() {
   const [accForm, setAccForm] = useState({ name: '', bank: '', account_no: '', opening_balance: 0, note: '' })
 
   // form giao dịch tay
-  const [txForm, setTxForm] = useState({ tx_date: today(), tx_time: '', direction: 'in', amount: '', description: '' })
+  const [txForm, setTxForm] = useState({ tx_date: today(), tx_time: '', direction: 'in', amount: '', description: '', counterparty: '' })
 
   // import sao kê
   const [showImport, setShowImport] = useState(false)
@@ -120,9 +120,10 @@ export default function BankAccounts() {
       tx_at: `${txForm.tx_date}T${t.length === 5 ? t + ':00' : t}`,
       direction: txForm.direction,
       amount: Number(txForm.amount), description: txForm.description.trim() || null,
+      counterparty: txForm.counterparty.trim() || null,
     })
     if (error) { setErr(error.message); return }
-    setTxForm({ tx_date: txForm.tx_date, tx_time: '', direction: txForm.direction, amount: '', description: '' })
+    setTxForm({ tx_date: txForm.tx_date, tx_time: '', direction: txForm.direction, amount: '', description: '', counterparty: '' })
     loadTxs(selId)
   }
   async function delTx(t) {
@@ -160,6 +161,7 @@ export default function BankAccounts() {
       tx_at: r.tx_at || `${r.tx_date}T00:00:00`,
       direction: r.direction,
       amount: Number(r.amount), description: r.description || null,
+      counterparty: r.counterparty || null,
     }))
     const { error } = await supabase.from('bank_tx').insert(payload)
     setSavingImp(false)
@@ -251,10 +253,17 @@ export default function BankAccounts() {
                   <button className="btn accent sm" style={{ width: '100%' }} onClick={addTx}>+ Thêm</button>
                 </div>
               </div>
-              <div className="field" style={{ marginTop: 10, marginBottom: 0 }}>
-                <label>Nội dung</label>
-                <input value={txForm.description}
-                  onChange={(e) => setTxForm({ ...txForm, description: e.target.value })} />
+              <div className="row c2" style={{ marginTop: 10 }}>
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <label>TK đối ứng (tên)</label>
+                  <input value={txForm.counterparty}
+                    onChange={(e) => setTxForm({ ...txForm, counterparty: e.target.value })} />
+                </div>
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <label>Nội dung</label>
+                  <input value={txForm.description}
+                    onChange={(e) => setTxForm({ ...txForm, description: e.target.value })} />
+                </div>
               </div>
             </Panel>
 
@@ -265,7 +274,9 @@ export default function BankAccounts() {
                 <table className="grid">
                   <thead>
                     <tr>
-                      <th style={{ width: 92 }}>Ngày</th><th>Nội dung</th>
+                      <th style={{ width: 92 }}>Ngày</th>
+                      <th style={{ width: 200 }}>TK đối ứng</th>
+                      <th>Nội dung</th>
                       <th className="num" style={{ width: 150 }}>Thu</th>
                       <th className="num" style={{ width: 150 }}>Chi</th>
                       <th className="num" style={{ width: 160 }}>Số dư</th>
@@ -274,7 +285,7 @@ export default function BankAccounts() {
                   </thead>
                   <tbody>
                     <tr>
-                      <td colSpan={4} className="muted">Số dư đầu kỳ</td>
+                      <td colSpan={5} className="muted">Số dư đầu kỳ</td>
                       <td className="num" style={{ fontWeight: 600 }}>{vnd(selected.opening_balance)}</td>
                       <td></td>
                     </tr>
@@ -286,6 +297,7 @@ export default function BankAccounts() {
                           {hhmm && hhmm !== '00:00:00' &&
                             <span className="muted" style={{ fontSize: 11, display: 'block' }}>{hhmm}</span>}
                         </td>
+                        <td>{t.counterparty || <span className="muted">—</span>}</td>
                         <td>{t.description || <span className="muted">—</span>}</td>
                         <td className="num pos" style={{ whiteSpace: 'nowrap' }}>{t.direction === 'in' ? vnd(t.amount) : ''}</td>
                         <td className="num neg" style={{ whiteSpace: 'nowrap' }}>{t.direction === 'out' ? vnd(t.amount) : ''}</td>
@@ -383,6 +395,7 @@ export default function BankAccounts() {
                 <tr>
                   <th style={{ width: 28 }}></th>
                   <th style={{ width: 120 }}>Ngày</th>
+                  <th style={{ width: 190 }}>TK đối ứng</th>
                   <th>Nội dung</th>
                   <th style={{ width: 90 }}>Loại</th>
                   <th className="num" style={{ width: 150 }}>Số tiền</th>
@@ -399,6 +412,10 @@ export default function BankAccounts() {
                       <input type="date" value={r.tx_date}
                         onChange={(e) => patchImp(i, { tx_date: e.target.value, error: null })} />
                       {r.tx_time && <div className="muted" style={{ fontSize: 11 }}>{r.tx_time}</div>}
+                    </td>
+                    <td>
+                      <input value={r.counterparty || ''}
+                        onChange={(e) => patchImp(i, { counterparty: e.target.value })} />
                     </td>
                     <td>
                       <input value={r.description}
