@@ -210,32 +210,61 @@ export default function ProfitReport() {
             </div>
           </Panel>
 
-          {isClosed && cogs.length > 0 && (
+          {isClosed && cogs.length > 0 && (() => {
+            // Kiểm tra giá vốn cho từng SKU:
+            //  - thiếu nguồn nhập: có bán nhưng đơn giá BQ = 0
+            //  - tồn âm: bán nhiều hơn nhập -> số liệu nhập chưa đủ
+            const flag = (r) => {
+              if (Number(r.sold_qty) > 0 && Number(r.avg_unit_cost) === 0) return 'Thiếu nguồn nhập (giá vốn = 0)'
+              if (Number(r.closing_qty) < 0) return 'Tồn âm (bán nhiều hơn nhập)'
+              return null
+            }
+            const problems = cogs.filter((r) => flag(r)).length
+            return (
             <Panel title="Chi tiết giá vốn đã chốt (bình quân gia quyền)">
+              {problems > 0 ? (
+                <div className="alert warn">
+                  <b>{problems}</b> mã hàng có vấn đề về giá vốn (tô đỏ bên dưới). Giá vốn các mã
+                  này chưa đúng vì thiếu dữ liệu nhập — hãy nhập <b>tồn kho đầu kỳ (có đơn giá vốn)</b>
+                  ở trang Tồn kho, hoặc <b>hóa đơn mua hàng hóa</b> cho các mã đó, rồi <b>Mở lại kỳ → Chốt kỳ</b> lại.
+                </div>
+              ) : (
+                <div className="alert ok">
+                  Tất cả mã hàng đã có giá vốn (đơn giá bình quân &gt; 0, không tồn âm).
+                  Hãy đối chiếu “Đơn giá BQ” với giá nhập thực tế của bạn để chắc chắn.
+                </div>
+              )}
               <table className="grid">
                 <thead>
                   <tr>
                     <th>SKU</th><th>Tên</th>
+                    <th className="num">Tồn đầu</th>
                     <th className="num">Mua lũy kế</th><th className="num">Đơn giá BQ</th>
                     <th className="num">Đã bán</th><th className="num">Giá vốn</th><th className="num">Tồn cuối</th>
+                    <th>Kiểm tra</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {cogs.map((r) => (
-                    <tr key={r.id}>
+                  {cogs.map((r) => {
+                    const f = flag(r)
+                    return (
+                    <tr key={r.id} style={f ? { background: 'var(--danger-soft)' } : undefined}>
                       <td style={{ fontWeight: 600 }}>{r.products?.sku}</td>
                       <td>{r.products?.name}</td>
+                      <td className="num">{num(r.opening_qty)}</td>
                       <td className="num">{num(r.purchase_qty)}</td>
                       <td className="num">{vnd(r.avg_unit_cost)}</td>
                       <td className="num">{num(r.sold_qty)}</td>
                       <td className="num">{vnd(r.cogs_value)}</td>
                       <td className="num">{num(r.closing_qty)} · {vnd(r.closing_value)}</td>
+                      <td>{f ? <span className="neg" style={{ fontSize: 12 }}>{f}</span>
+                             : <span className="pos">✓</span>}</td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </Panel>
-          )}
+          )})()}
         </>
       ))}
 
