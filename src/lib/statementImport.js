@@ -24,11 +24,15 @@ const schema = {
             type: ['string', 'null'],
             description: 'Giờ giao dịch HH:MM:SS nếu sao kê có (vd 15:31:12), không có thì null',
           },
+          counterparty: {
+            type: ['string', 'null'],
+            description: 'Tên tài khoản đối ứng (Remitter/Beneficiary account name), vd "cong ty co phan airpay"; không có thì null',
+          },
           description: { type: ['string', 'null'] },
           direction: { type: 'string', enum: ['in', 'out'], description: 'in=tiền vào, out=tiền ra' },
           amount: { type: ['number', 'null'], description: 'số tiền dương, không dấu phân cách' },
         },
-        required: ['tx_date', 'tx_time', 'description', 'direction', 'amount'],
+        required: ['tx_date', 'tx_time', 'counterparty', 'description', 'direction', 'amount'],
       },
     },
   },
@@ -57,6 +61,7 @@ const SYS =
   'tx_date theo YYYY-MM-DD. QUAN TRỌNG: nếu sao kê có cột thời gian/ngày giờ thực hiện ' +
   '(vd "2026-10-31 15:31:12"), hãy tách GIỜ ra tx_time dạng HH:MM:SS — việc này cần ' +
   'để sắp đúng thứ tự các giao dịch trong cùng một ngày. Nếu không có giờ thì tx_time=null. ' +
+  'counterparty là tên tài khoản đối ứng (Remitter/Beneficiary account name); không có thì null. ' +
   'Bỏ qua dòng tiêu đề, dòng tổng, dòng số dư đầu/cuối. Chỉ lấy giao dịch thật.'
 
 function fileToBase64(file) {
@@ -78,6 +83,7 @@ function normRows(rows) {
       tx_date: date,
       tx_time: time || '',
       tx_at,
+      counterparty: r.counterparty || '',
       description: r.description || '',
       direction: r.direction === 'out' ? 'out' : 'in',
       amount: Number(r.amount) || 0,
